@@ -19,6 +19,27 @@ class DomainEvent:
             self.timestamp = datetime.now()
         if self.payload is None:
             self.payload = {}
+    
+    def to_dict(self) -> dict:
+        return {
+            "event_id": str(self.event_id),
+            "timestamp": self.timestamp.isoformat(),
+            "event_type": self.event_type,
+            "payload": self.payload,
+    }
+
+    @staticmethod
+    def from_dict(data: dict) -> "DomainEvent":
+        import uuid
+        from datetime import datetime
+
+        return DomainEvent(
+            event_id=uuid.UUID(data["event_id"]),
+            timestamp=datetime.fromisoformat(data["timestamp"]),
+            event_type=data["event_type"],
+            payload=data["payload"],
+    )
+
 
 class FundsCredited(DomainEvent):
     def __init__(self, amount: Decimal):

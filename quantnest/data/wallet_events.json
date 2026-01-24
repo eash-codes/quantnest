@@ -1,0 +1,34 @@
+[
+  {
+    "event_id": "d27c51f4-9bcf-48d7-8b81-01069b9eb62e",
+    "timestamp": "2026-01-24T18:32:17.317622",
+    "event_type": "FundsCredited",
+    "payload": {
+      "amount": "500"
+    }
+  },
+  {
+    "event_id": "6556428a-56b3-4560-8e1c-482e25609325",
+    "timestamp": "2026-01-24T18:32:17.317914",
+    "event_type": "FundsDebited",
+    "payload": {
+      "amount": "200"
+    }
+  },
+  {
+    "event_id": "5a975ea8-daba-4859-818e-991fd32ec082",
+    "timestamp": "2026-01-24T18:32:23.964134",
+    "event_type": "FundsCredited",
+    "payload": {
+      "amount": "500"
+    }
+  },
+  {
+    "event_id": "dc1a8f80-5faf-4212-b568-1459237e9a4b",
+    "timestamp": "2026-01-24T18:32:23.964552",
+    "event_type": "FundsDebited",
+    "payload": {
+      "amount": "200"
+    }
+  }
+]

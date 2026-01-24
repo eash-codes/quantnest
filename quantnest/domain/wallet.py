@@ -1,6 +1,6 @@
 """Wallet - single source of truth for account balance."""
 
-
+from quantnest.infra.storage import load_events, append_event
 from decimal import Decimal
 from typing import List
 from .events import DomainEvent, FundsCredited, FundsDebited
@@ -13,6 +13,9 @@ class Wallet:
         self._wallet_id = wallet_id
         self._balance = Decimal("0")
         self._events = []
+        self._events = load_events()
+        self._replay_events()
+
 
     @property
     def balance (self) -> Decimal:
@@ -34,6 +37,7 @@ class Wallet:
         self._balance += amount
         event = FundsCredited(amount)
         self._events.append(event)
+        append_event(event)
 
     def debit(self, amount: Decimal) -> None:
         """Spend or withdraw, Reject only if insufficient balance"""
@@ -46,3 +50,14 @@ class Wallet:
         self._balance -= amount
         event = FundsDebited(amount)
         self._events.append(event)
+        append_event(event)
+
+    def _replay_events(self) -> None:
+        self._balance = Decimal("0")
+        for event in self._events:
+            amount = Decimal(event.payload.get("amount", "0"))
+
+            if event.event_type == "FundsCredited":
+                self._balance += amount
+            elif event.event_type == "FundsDebited":
+                self._balance -= amount
