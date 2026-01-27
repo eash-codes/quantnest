@@ -1,9 +1,18 @@
 from decimal import Decimal
-from quantnest.domain.wallet import Wallet
+from quantnest.domain.portfolio import Portfolio
+from quantnest.domain.market import MarketProvider
 
-wallet = Wallet("user-1")
-wallet.credit(Decimal("500"))
-wallet.debit(Decimal("200"))
+# Setup
+market = MarketProvider()
+portfolio = Portfolio("user-1", market)
 
-print("Balance:", wallet.balance)
-print("Events:", len(wallet.events))
+# Fund wallet directly (since it's private in Portfolio)
+portfolio.wallet.credit(Decimal("100000"))
+
+# Trade
+portfolio.buy("RELIANCE", Decimal("10"))
+portfolio.sell("RELIANCE", Decimal("5"))
+
+print("Wallet balance:", portfolio.wallet.balance)
+print("RELIANCE position:", portfolio.positions.get("RELIANCE", 0))
+print("Trades:", len(portfolio.trades))
