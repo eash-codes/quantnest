@@ -12,8 +12,7 @@ class Wallet:
     def __init__(self, wallet_id: str):
         self._wallet_id = wallet_id
         self._balance = Decimal("0")
-        self._events = []
-        self._events = load_events()
+        self._events = load_events(self._wallet_id)
         self._replay_events()
 
 
@@ -37,7 +36,7 @@ class Wallet:
         self._balance += amount
         event = FundsCredited(amount)
         self._events.append(event)
-        append_event(event)
+        append_event(event, self._wallet_id)
 
     def debit(self, amount: Decimal) -> None:
         """Spend or withdraw, Reject only if insufficient balance"""
@@ -50,7 +49,7 @@ class Wallet:
         self._balance -= amount
         event = FundsDebited(amount)
         self._events.append(event)
-        append_event(event)
+        append_event(event, self._wallet_id)
 
     def _replay_events(self) -> None:
         self._balance = Decimal("0")
