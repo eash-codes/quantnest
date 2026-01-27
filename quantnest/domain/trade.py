@@ -2,7 +2,7 @@
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Dict
+from typing import Literal
 from decimal import Decimal
 
 @dataclass(frozen=True)
