@@ -1,5 +1,6 @@
 """Portfolio manages asset positions, delegates money to Wallet."""
 
+import uuid
 from decimal import Decimal, ROUND_HALF_UP
 from typing import Dict, List
 
@@ -36,19 +37,23 @@ class Portfolio:
     def trades(self) -> List[Trade]:
         return self._trades.copy()
 
-    def buy(self, symbol: str, quantity: Decimal) -> None:
+    def buy(self, symbol: str, quantity: Decimal, transaction_id: str = None) -> None:
         """Buy quantity of symbol if sufficient funds exist."""
         if quantity <= 0:
             raise ValueError("Quantity must be positive")
 
+        # DAY 5: Generate unique transaction ID (your UPI receipt)
+        tx_id = transaction_id or str(uuid.uuid4())
+
         price = self._market.get_price(symbol)
         cost = price * quantity
 
-        self.wallet.debit(cost)
+        # Pass transaction_id to wallet → idempotent & safe!
+        self.wallet.debit(cost, transaction_id=tx_id)
         self._positions[symbol] = self._positions.get(symbol, Decimal("0")) + quantity
         self._trades.append(Trade(symbol, "BUY", quantity, price))
 
-    def sell(self, symbol: str, quantity: Decimal) -> None:
+    def sell(self, symbol: str, quantity: Decimal, transaction_id: str = None) -> None:
         """Sell quantity of symbol if owned."""
         if quantity <= 0:
             raise ValueError("Quantity must be positive")
@@ -57,10 +62,14 @@ class Portfolio:
         if quantity > owned:
             raise ValueError(f"Cannot sell {quantity}, own only {owned}")
 
+        # DAY 5: Generate unique transaction ID
+        tx_id = transaction_id or str(uuid.uuid4())
+
         price = self._market.get_price(symbol)
         proceeds = price * quantity
 
-        self.wallet.credit(proceeds)
+        # Pass transaction_id to wallet → idempotent & safe!
+        self.wallet.credit(proceeds, transaction_id=tx_id)
         self._positions[symbol] = owned - quantity
         if self._positions[symbol] == 0:
             del self._positions[symbol]

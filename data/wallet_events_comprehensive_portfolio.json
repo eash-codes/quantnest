@@ -1,0 +1,20 @@
+[
+  {
+    "event_id": "ec3178dc-6d03-45f8-aa53-5dcfdf2dfc99",
+    "timestamp": "2026-02-07T17:42:10.999252",
+    "event_type": "FundsCredited",
+    "transaction_id": "211e8076-9026-4287-bfc4-aae9ccb7fd83",
+    "payload": {
+      "amount": "100000"
+    }
+  },
+  {
+    "event_id": "db92f0ec-a8b9-4955-8ef8-6073e6215626",
+    "timestamp": "2026-02-07T17:42:10.999208",
+    "event_type": "FundsDebited",
+    "transaction_id": "958d448f-84ff-4717-adf0-af409e0af69c",
+    "payload": {
+      "amount": "25000.00"
+    }
+  }
+]

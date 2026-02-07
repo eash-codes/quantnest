@@ -1,0 +1,20 @@
+[
+  {
+    "event_id": "0d3048cd-867b-4ee1-8d9c-570882a87317",
+    "timestamp": "2026-02-07T17:58:34.924688",
+    "event_type": "FundsCredited",
+    "transaction_id": "tx_same",
+    "payload": {
+      "amount": "1000"
+    }
+  },
+  {
+    "event_id": "a828f0a5-96e7-48c4-b2db-49ad3347d4af",
+    "timestamp": "2026-02-07T17:58:34.924629",
+    "event_type": "FundsDebited",
+    "transaction_id": "debit_same",
+    "payload": {
+      "amount": "300"
+    }
+  }
+]
