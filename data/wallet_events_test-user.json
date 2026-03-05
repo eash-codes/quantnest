@@ -1,0 +1,29 @@
+[
+  {
+    "event_id": "81138f34-912d-42cf-afc7-2310cbe36dc6",
+    "timestamp": "2026-02-16T17:08:36.431642",
+    "event_type": "FundsCredited",
+    "transaction_id": "test-txn-1",
+    "payload": {
+      "amount": "5000.0"
+    }
+  },
+  {
+    "event_id": "8f38ab3b-5218-422a-b379-c3255f14730b",
+    "timestamp": "2026-02-16T17:08:36.431647",
+    "event_type": "FundsDebited",
+    "transaction_id": "test-txn-buy-2",
+    "payload": {
+      "amount": "1650.000"
+    }
+  },
+  {
+    "event_id": "851cd1a5-09a9-4dab-b889-317beebc254b",
+    "timestamp": "2026-02-16T17:08:36.431588",
+    "event_type": "FundsDebited",
+    "transaction_id": "test-txn-buy-new",
+    "payload": {
+      "amount": "1650.000"
+    }
+  }
+]

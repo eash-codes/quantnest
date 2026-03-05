@@ -9,7 +9,7 @@ from dataclasses import dataclass, field
 @dataclass(kw_only=True)
 class DomainEvent:
     event_type: str
-    transaction_id: str              # ← DAY 5: unique payment receipt
+    transaction_id: str              
     payload: Dict[str, Any] = field(default_factory=dict)
     event_id: uuid.UUID = field(default_factory=uuid.uuid4)
     timestamp: datetime = field(default_factory=datetime.now)
@@ -19,7 +19,7 @@ class DomainEvent:
             "event_id": str(self.event_id),
             "timestamp": self.timestamp.isoformat(),
             "event_type": self.event_type,
-            "transaction_id": self.transaction_id,  # ← DAY 5
+            "transaction_id": self.transaction_id,  
             "payload": self.payload,
         }
 
@@ -62,7 +62,7 @@ class FundsDebited(DomainEvent):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'FundsDebited':
-        # Handle backward compatibility: older events may not have transaction_id
+        #  Handle backward compatibility: older events may not have transaction_id
         transaction_id = data.get("transaction_id")
         if transaction_id is None:
             # For backward compatibility, generate a new transaction_id if not present

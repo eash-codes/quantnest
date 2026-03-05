@@ -7,6 +7,7 @@ from typing import Dict, List
 from .wallet import Wallet
 from .market import MarketProvider
 from .trade import Trade
+from quantnest.infra.storage import load_positions, save_positions
 
 # Money formatting (2 decimal places, round half up)
 MONEY = Decimal("0.01")
@@ -21,7 +22,14 @@ class Portfolio:
     def __init__(self, wallet_id: str, market: MarketProvider):
         self._wallet = Wallet(wallet_id)
         self._market = market
-        self._positions: Dict[str, Decimal] = {}
+        self._wallet_id = wallet_id
+        
+        # Load existing positions from storage
+        loaded_positions = load_positions(wallet_id)
+        self._positions: Dict[str, Decimal] = {
+            symbol: Decimal(str(quantity)) 
+            for symbol, quantity in loaded_positions.items()
+        }
         self._trades: List[Trade] = []
 
     @property
@@ -52,6 +60,16 @@ class Portfolio:
         self.wallet.debit(cost, transaction_id=tx_id)
         self._positions[symbol] = self._positions.get(symbol, Decimal("0")) + quantity
         self._trades.append(Trade(symbol, "BUY", quantity, price))
+        
+        # Persist positions to storage
+        self._save_positions()
+        
+    def _save_positions(self):
+        """Save current positions to storage."""
+        positions_dict = {symbol: float(quantity) for symbol, quantity in self._positions.items()}
+        # Remove zero quantities
+        positions_dict = {k: v for k, v in positions_dict.items() if v > 0}
+        save_positions(self._wallet_id, positions_dict)
 
     def sell(self, symbol: str, quantity: Decimal, transaction_id: str = None) -> None:
         """Sell quantity of symbol if owned."""
@@ -74,6 +92,9 @@ class Portfolio:
         if self._positions[symbol] == 0:
             del self._positions[symbol]
         self._trades.append(Trade(symbol, "SELL", quantity, price))
+        
+        # Persist positions to storage
+        self._save_positions()
 
     # ==================================================
     # DAY 4: READ-ONLY ANALYTICS (No side effects)
