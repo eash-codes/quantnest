@@ -7,7 +7,7 @@ from typing import Dict, List
 from .wallet import Wallet
 from .market import MarketProvider
 from .trade import Trade
-from quantnest.infra.storage import load_positions, save_positions
+from quantnest.infra.storage import load_positions, save_positions, load_trades, save_trade
 
 # Money formatting (2 decimal places, round half up)
 MONEY = Decimal("0.01")
@@ -30,7 +30,9 @@ class Portfolio:
             symbol: Decimal(str(quantity)) 
             for symbol, quantity in loaded_positions.items()
         }
-        self._trades: List[Trade] = []
+        
+        # Load existing trades from storage
+        self._trades: List[Trade] = load_trades(wallet_id)
 
     @property
     def wallet(self) -> Wallet:
@@ -65,11 +67,15 @@ class Portfolio:
         self._save_positions()
         
     def _save_positions(self):
-        """Save current positions to storage."""
+        """Save current positions and trades to storage."""
         positions_dict = {symbol: float(quantity) for symbol, quantity in self._positions.items()}
         # Remove zero quantities
         positions_dict = {k: v for k, v in positions_dict.items() if v > 0}
         save_positions(self._wallet_id, positions_dict)
+        
+        # Save all trades to storage
+        for trade in self._trades:
+            save_trade(self._wallet_id, trade)
 
     def sell(self, symbol: str, quantity: Decimal, transaction_id: str = None) -> None:
         """Sell quantity of symbol if owned."""

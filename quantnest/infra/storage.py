@@ -1,16 +1,21 @@
-"""Enhanced storage with position tracking for Day 7."""
+"""Enhanced storage with position and trade tracking for Day 7+."""
 
 import json
 from pathlib import Path
 from typing import List, Dict, Any
 from decimal import Decimal
 from quantnest.domain.events import DomainEvent
+from quantnest.domain.trade import Trade
+from datetime import datetime
 
 def get_event_file(wallet_id: str) -> Path:
     return Path(f"data/wallet_events_{wallet_id}.json")
 
 def get_position_file(wallet_id: str) -> Path:
     return Path(f"data/positions_{wallet_id}.json")
+
+def get_trade_file(wallet_id: str) -> Path:
+    return Path(f"data/trades_{wallet_id}.json")
 
 def load_events(wallet_id: str = None) -> List[DomainEvent]:
     if wallet_id is None:
@@ -54,3 +59,58 @@ def save_positions(wallet_id: str, positions: Dict[str, float]) -> None:
     pos_file = get_position_file(wallet_id)
     pos_file.parent.mkdir(parents=True, exist_ok=True)
     pos_file.write_text(json.dumps(positions, indent=2))
+
+def load_trades(wallet_id: str) -> List[Trade]:
+    """Load persisted trades for a wallet."""
+    trade_file = get_trade_file(wallet_id)
+    try:
+        if trade_file.exists():
+            content = trade_file.read_text().strip()
+            if content:
+                trades_data = json.loads(content)
+                return [
+                    Trade(
+                        symbol=t["symbol"],
+                        side=t["side"],
+                        quantity=Decimal(str(t["quantity"])),
+                        price=Decimal(str(t["price"])),
+                        timestamp=datetime.fromisoformat(t["timestamp"])
+                    )
+                    for t in trades_data
+                ]
+        return []
+    except (json.JSONDecodeError, FileNotFoundError, KeyError):
+        return []
+
+def save_trade(wallet_id: str, trade: Trade) -> None:
+    """Append a trade to the wallet's trade file."""
+    trades = load_trades(wallet_id)
+    
+    # Check if trade already exists (by comparing all fields except timestamp precision)
+    trade_exists = any(
+        t.symbol == trade.symbol and
+        t.side == trade.side and
+        t.quantity == trade.quantity and
+        t.price == trade.price
+        for t in trades
+    )
+    
+    if trade_exists:
+        return  # Don't save duplicate trades
+    
+    trades.append(trade)
+    
+    trade_file = get_trade_file(wallet_id)
+    trade_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    trades_data = [
+        {
+            "symbol": t.symbol,
+            "side": t.side,
+            "quantity": float(t.quantity),
+            "price": float(t.price),
+            "timestamp": t.timestamp.isoformat() if hasattr(t.timestamp, 'isoformat') else datetime.now().isoformat()
+        }
+        for t in trades
+    ]
+    trade_file.write_text(json.dumps(trades_data, indent=2))
