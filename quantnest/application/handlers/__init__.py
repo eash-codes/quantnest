@@ -1,10 +1,12 @@
-"""Command handlers for wallet operations."""
+"""Command handlers for wallet and portfolio operations."""
 
 from decimal import Decimal
 from typing import Dict, Any
 from quantnest.domain.wallet import Wallet
 from quantnest.domain.market import MarketProvider
 from quantnest.domain.portfolio import Portfolio
+from quantnest.domain.order import OrderStatus
+from quantnest.domain.order_engine import OrderExecutionEngine
 from quantnest.application.commands.wallet_commands import CreditWalletCommand, DebitWalletCommand
 from quantnest.application.commands.portfolio_commands import BuyAssetCommand, SellAssetCommand
 
@@ -44,46 +46,88 @@ class DebitWalletHandler:
 
 
 class BuyAssetHandler:
-    """Handle buy asset commands."""
+    """Handle buy asset commands using Order Execution Engine."""
     
     def handle(self, command: BuyAssetCommand) -> Dict[str, Any]:
-        """Execute buy command."""
-        market = MarketProvider()
-        portfolio = Portfolio(command.wallet_id, market)
-        portfolio.buy(command.symbol, command.quantity, command.transaction_id)
+        """Execute buy command through order engine."""
+        engine = OrderExecutionEngine()
+        order = engine.place_order(
+            wallet_id=command.wallet_id,
+            symbol=command.symbol,
+            side="BUY",
+            quantity=command.quantity,
+            order_type="MARKET",
+            transaction_id=command.transaction_id
+        )
         
-        return {
+        # Return order-based response
+        response = {
             "wallet_id": command.wallet_id,
             "symbol": command.symbol,
             "quantity": float(command.quantity),
             "transaction_id": command.transaction_id,
-            "message": f"Successfully bought {command.quantity} shares of {command.symbol}",
-            "portfolio_summary": {
+            "order_id": order.order_id,
+            "order_status": order.status,
+        }
+        
+        if order.is_rejected:
+            response["message"] = f"Order rejected: {order.rejection_reason}"
+            response["success"] = False
+        else:
+            response["message"] = f"Successfully bought {command.quantity} shares of {command.symbol}"
+            response["success"] = True
+            
+            # Get updated portfolio summary
+            market = MarketProvider()
+            portfolio = Portfolio(command.wallet_id, market)
+            response["portfolio_summary"] = {
                 "cash": float(portfolio.cash()),
                 "total_value": float(portfolio.total_value()),
                 "positions": {k: float(v) for k, v in portfolio.positions.items()}
             }
-        }
+        
+        return response
 
 
 class SellAssetHandler:
-    """Handle sell asset commands."""
+    """Handle sell asset commands using Order Execution Engine."""
     
     def handle(self, command: SellAssetCommand) -> Dict[str, Any]:
-        """Execute sell command."""
-        market = MarketProvider()
-        portfolio = Portfolio(command.wallet_id, market)
-        portfolio.sell(command.symbol, command.quantity, command.transaction_id)
+        """Execute sell command through order engine."""
+        engine = OrderExecutionEngine()
+        order = engine.place_order(
+            wallet_id=command.wallet_id,
+            symbol=command.symbol,
+            side="SELL",
+            quantity=command.quantity,
+            order_type="MARKET",
+            transaction_id=command.transaction_id
+        )
         
-        return {
+        # Return order-based response
+        response = {
             "wallet_id": command.wallet_id,
             "symbol": command.symbol,
             "quantity": float(command.quantity),
             "transaction_id": command.transaction_id,
-            "message": f"Successfully sold {command.quantity} shares of {command.symbol}",
-            "portfolio_summary": {
+            "order_id": order.order_id,
+            "order_status": order.status,
+        }
+        
+        if order.is_rejected:
+            response["message"] = f"Order rejected: {order.rejection_reason}"
+            response["success"] = False
+        else:
+            response["message"] = f"Successfully sold {command.quantity} shares of {command.symbol}"
+            response["success"] = True
+            
+            # Get updated portfolio summary
+            market = MarketProvider()
+            portfolio = Portfolio(command.wallet_id, market)
+            response["portfolio_summary"] = {
                 "cash": float(portfolio.cash()),
                 "total_value": float(portfolio.total_value()),
                 "positions": {k: float(v) for k, v in portfolio.positions.items()}
             }
-        }
+        
+        return response

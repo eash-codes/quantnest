@@ -8,7 +8,9 @@ import uuid
 from quantnest.domain.wallet import Wallet
 from quantnest.domain.portfolio import Portfolio
 from quantnest.domain.market import MarketProvider
-from quantnest.infra.storage import load_events
+from quantnest.domain.order import OrderStatus
+from quantnest.domain.order_engine import OrderExecutionEngine
+from quantnest.infra.storage import load_events, load_orders
 from quantnest.application.queries.history_dtos import (
     TradeHistoryItem,
     OrderHistoryItem,
@@ -65,31 +67,11 @@ class HistoryService:
     def get_orders(self, wallet_id: str, status: Optional[str] = None,
                    limit: int = 50, offset: int = 0) -> PaginatedResponse:
         """
-        Get order history for a wallet.
+        Get order history for a wallet from persistent order storage.
         
-        Note: This is a simplified implementation. In a full system,
-        orders would be persisted separately with their own lifecycle.
-        For now, we derive order history from trades (executed orders).
+        Returns actual orders with their lifecycle (PENDING, FILLED, REJECTED, etc.)
         """
-        # For now, derive orders from trades (filled orders)
-        portfolio = Portfolio(wallet_id, self._market)
-        trades = portfolio.trades
-        
-        # Convert trades to order history (filled orders)
-        orders = [
-            OrderHistoryItem(
-                order_id=str(uuid.uuid4()),
-                wallet_id=wallet_id,
-                symbol=t.symbol,
-                side=t.side,
-                quantity=float(t.quantity),
-                order_type="MARKET",
-                status="FILLED",
-                price=float(t.price),
-                timestamp=t.timestamp
-            )
-            for t in trades
-        ]
+        orders = load_orders(wallet_id)
         
         # Filter by status if provided
         if status:
@@ -101,8 +83,23 @@ class HistoryService:
         total = len(orders)
         orders_page = orders[offset:offset + limit]
         
+        items = [
+            OrderHistoryItem(
+                order_id=o.order_id,
+                wallet_id=o.wallet_id,
+                symbol=o.symbol,
+                side=o.side,
+                quantity=float(o.quantity),
+                order_type=o.order_type,
+                status=o.status,
+                price=float(o.average_fill_price) if o.average_fill_price else None,
+                timestamp=o.timestamp
+            )
+            for o in orders_page
+        ]
+        
         return PaginatedResponse(
-            items=orders_page,
+            items=items,
             total=total,
             limit=limit,
             offset=offset,
@@ -152,8 +149,8 @@ class HistoryService:
         
         Combines:
         - Wallet events (credits/debits)
-        - Trades (buy/sell executions)
         - Orders (placed/filled/rejected)
+        - Trades (buy/sell executions)
         
         All sorted by timestamp.
         """
@@ -181,6 +178,67 @@ class HistoryService:
                     }
                 )
             )
+        
+        # Get orders
+        orders = load_orders(wallet_id)
+        for order in orders:
+            # Apply date filtering
+            if start_date and order.timestamp < start_date:
+                continue
+            if end_date and order.timestamp > end_date:
+                continue
+            
+            # Add order placed event
+            timeline_events.append(
+                TimelineEvent(
+                    event_type="order_placed",
+                    timestamp=order.timestamp,
+                    wallet_id=wallet_id,
+                    metadata={
+                        "order_id": order.order_id,
+                        "symbol": order.symbol,
+                        "side": order.side,
+                        "quantity": float(order.quantity),
+                        "order_type": order.order_type,
+                        "status": order.status
+                    }
+                )
+            )
+            
+            # Add order filled event if order was filled
+            if order.is_filled or order.is_partial:
+                timeline_events.append(
+                    TimelineEvent(
+                        event_type="order_filled",
+                        timestamp=order.timestamp,
+                        wallet_id=wallet_id,
+                        metadata={
+                            "order_id": order.order_id,
+                            "symbol": order.symbol,
+                            "side": order.side,
+                            "filled_quantity": float(order.filled_quantity),
+                            "average_price": float(order.average_fill_price) if order.average_fill_price else None,
+                            "status": order.status
+                        }
+                    )
+                )
+            
+            # Add order rejected event if order was rejected
+            if order.is_rejected:
+                timeline_events.append(
+                    TimelineEvent(
+                        event_type="order_rejected",
+                        timestamp=order.timestamp,
+                        wallet_id=wallet_id,
+                        metadata={
+                            "order_id": order.order_id,
+                            "symbol": order.symbol,
+                            "side": order.side,
+                            "quantity": float(order.quantity),
+                            "rejection_reason": order.rejection_reason
+                        }
+                    )
+                )
         
         # Get trades
         portfolio = Portfolio(wallet_id, self._market)

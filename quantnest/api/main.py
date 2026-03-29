@@ -4,6 +4,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from .portfolio import router as portfolio_router
 from .history import router as history_router
+from .orders import router as orders_router
 
 app = FastAPI(title="QuantNest Trading Platform", version="9.0")
 
@@ -17,6 +18,7 @@ app.add_middleware(
 
 app.include_router(portfolio_router)
 app.include_router(history_router)
+app.include_router(orders_router)
 
 @app.get("/")
 async def root():

@@ -6,6 +6,7 @@ from typing import List, Dict, Any
 from decimal import Decimal
 from quantnest.domain.events import DomainEvent
 from quantnest.domain.trade import Trade
+from quantnest.domain.order import Order
 from datetime import datetime
 
 def get_event_file(wallet_id: str) -> Path:
@@ -16,6 +17,9 @@ def get_position_file(wallet_id: str) -> Path:
 
 def get_trade_file(wallet_id: str) -> Path:
     return Path(f"data/trades_{wallet_id}.json")
+
+def get_order_file(wallet_id: str) -> Path:
+    return Path(f"data/orders_{wallet_id}.json")
 
 def load_events(wallet_id: str = None) -> List[DomainEvent]:
     if wallet_id is None:
@@ -114,3 +118,41 @@ def save_trade(wallet_id: str, trade: Trade) -> None:
         for t in trades
     ]
     trade_file.write_text(json.dumps(trades_data, indent=2))
+
+def load_orders(wallet_id: str) -> List[Order]:
+    """Load persisted orders for a wallet."""
+    order_file = get_order_file(wallet_id)
+    try:
+        if order_file.exists():
+            content = order_file.read_text().strip()
+            if content:
+                orders_data = json.loads(content)
+                return [Order.from_dict(o) for o in orders_data]
+        return []
+    except (json.JSONDecodeError, FileNotFoundError, KeyError):
+        return []
+
+def save_order(wallet_id: str, order: Order) -> None:
+    """Save or update an order in the wallet's order file."""
+    orders = load_orders(wallet_id)
+    
+    # Check if order already exists and update it
+    order_exists = False
+    for i, existing_order in enumerate(orders):
+        if existing_order.order_id == order.order_id:
+            orders[i] = order
+            order_exists = True
+            break
+    
+    if not order_exists:
+        orders.append(order)
+    
+    order_file = get_order_file(wallet_id)
+    order_file.parent.mkdir(parents=True, exist_ok=True)
+    
+    orders_data = [o.to_dict() for o in orders]
+    order_file.write_text(json.dumps(orders_data, indent=2))
+
+def append_order(wallet_id: str, order: Order) -> None:
+    """Append a new order (alias for save_order for new orders)."""
+    save_order(wallet_id, order)
