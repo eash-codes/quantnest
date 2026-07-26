@@ -4,11 +4,40 @@ build-backend = "hatchling.build"
 
 [project]
 name = "quantnest"
-version = "0.1.0"
-description = "Trading simulator"
+version = "11.0.0"
+description = "A trading simulator built with domain-driven design"
 requires-python = ">=3.10"
 dependencies = [
-    "fastapi",
-    "uvicorn",
-    "yfinance"
+    "fastapi>=0.110",
+    "uvicorn[standard]>=0.27",
+    "pydantic>=2.6",
+    "sqlalchemy>=2.0",
+    "yfinance>=0.2",
 ]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-cov>=4.1",
+    "httpx>=0.27",
+]
+postgres = [
+    "psycopg[binary]>=3.1",
+]
+
+[project.scripts]
+quantnest = "quantnest.main:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["quantnest"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+pythonpath = ["."]
+filterwarnings = [
+    "ignore::DeprecationWarning:starlette.*",
+]
+
+[tool.coverage.run]
+source = ["quantnest"]
+omit = ["*/__pycache__/*", "*/tests/*"]

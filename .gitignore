@@ -9,3 +9,9 @@ build/
 .venv
 
 
+# SQLite database files (generated; migrate from data/*.json)
+*.db
+*.db-wal
+*.db-shm
+.coverage
+.DS_Store

@@ -1,149 +1,154 @@
-"""Portfolio API with commands and queries."""
+"""Portfolio API — summary queries and trading commands."""
 
-from fastapi import APIRouter, HTTPException, Header
-from pydantic import BaseModel
-from typing import Dict, Any, List, Optional
-from quantnest.application.portfolio_service import PortfolioService
-from quantnest.application.commands.wallet_commands import CreditWalletCommand, DebitWalletCommand
-from quantnest.application.commands.portfolio_commands import BuyAssetCommand, SellAssetCommand
-from quantnest.application.handlers import (
-    CreditWalletHandler, 
-    DebitWalletHandler, 
-    BuyAssetHandler, 
-    SellAssetHandler
+from __future__ import annotations
+
+import logging
+
+from fastapi import APIRouter, status
+
+from quantnest.api.deps import (
+    EventStoreDep,
+    MarketDep,
+    OrderEngineDep,
+    PortfolioServiceDep,
+    PositionRepoDep,
+    TradeRepoDep,
+    TransactionIdDep,
+    WalletIdDep,
 )
+from quantnest.api.schemas import (
+    CreditRequest,
+    DebitRequest,
+    PortfolioSummaryResponse,
+    TradeRequest,
+    TradeResponse,
+    WalletTransactionResponse,
+)
+from quantnest.application.commands.portfolio_commands import BuyAssetCommand, SellAssetCommand
+from quantnest.application.commands.wallet_commands import CreditWalletCommand, DebitWalletCommand
+from quantnest.application.handlers import TradeCommandHandler, WalletCommandHandler
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/portfolio", tags=["portfolio"])
 
-class PortfolioSummary(BaseModel):
-    wallet_id: str
-    cash: float
-    total_asset_value: float
-    total_value: float
-    positions: Dict[str, float]
-    asset_values: Optional[Dict[str, float]] = None
-    avg_cost: Optional[Dict[str, float]] = None
-    unrealized_pnl: Dict[str, float]
-    allocations: Dict[str, float]
-    health_signals: List[str]
-    event_count: int
 
-    class Config:
-        extra = "allow"
+@router.get("/health", summary="Service health check")
+async def health_check() -> dict:
+    return {"status": "healthy"}
 
-@router.get("/{wallet_id}/summary", response_model=PortfolioSummary)
-async def get_portfolio_summary(wallet_id: str):
-    """Get complete portfolio analytics."""
-    try:
-        service = PortfolioService()
-        return service.get_summary(wallet_id)
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/health")
-async def health_check():
-    """Health check."""
-    return {"status": "healthy", "ledger_version": "Day7"}
+@router.get(
+    "/{wallet_id}/summary",
+    response_model=PortfolioSummaryResponse,
+    summary="Full portfolio analytics snapshot",
+)
+async def get_portfolio_summary(
+    wallet_id: WalletIdDep,
+    service: PortfolioServiceDep,
+) -> PortfolioSummaryResponse:
+    return PortfolioSummaryResponse(**service.get_summary(wallet_id))
 
-# POST endpoints for commands
-class CreditRequest(BaseModel):
-    amount: float
 
-class DebitRequest(BaseModel):
-    amount: float
-
-class BuyRequest(BaseModel):
-    symbol: str
-    quantity: float
-
-class SellRequest(BaseModel):
-    symbol: str
-    quantity: float
-
-@router.post("/{wallet_id}/credit")
+@router.post(
+    "/{wallet_id}/credit",
+    response_model=WalletTransactionResponse,
+    summary="Credit funds to a wallet",
+)
 async def credit_wallet(
-    wallet_id: str, 
+    wallet_id: WalletIdDep,
     request: CreditRequest,
-    x_transaction_id: Optional[str] = Header(None)
-):
-    """Credit funds to wallet."""
-    try:
-        command = CreditWalletCommand(
-            wallet_id=wallet_id, 
-            amount=request.amount,
-            transaction_id=x_transaction_id
-        )
-        handler = CreditWalletHandler()
-        return handler.handle(command)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+    transaction_id: TransactionIdDep,
+    event_store: EventStoreDep,
+) -> WalletTransactionResponse:
+    handler = WalletCommandHandler(event_store=event_store)
+    command = CreditWalletCommand(
+        wallet_id=wallet_id,
+        amount=request.amount,
+        transaction_id=transaction_id,
+    )
+    return WalletTransactionResponse(**handler.credit(command))
 
-@router.post("/{wallet_id}/debit")
+
+@router.post(
+    "/{wallet_id}/debit",
+    response_model=WalletTransactionResponse,
+    summary="Debit funds from a wallet",
+)
 async def debit_wallet(
-    wallet_id: str, 
+    wallet_id: WalletIdDep,
     request: DebitRequest,
-    x_transaction_id: Optional[str] = Header(None)
-):
-    """Debit funds from wallet."""
-    try:
-        command = DebitWalletCommand(
-            wallet_id=wallet_id, 
-            amount=request.amount,
-            transaction_id=x_transaction_id
-        )
-        handler = DebitWalletHandler()
-        return handler.handle(command)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        if "InsufficientFundsError" in str(type(e)):
-            raise HTTPException(status_code=409, detail=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+    transaction_id: TransactionIdDep,
+    event_store: EventStoreDep,
+) -> WalletTransactionResponse:
+    handler = WalletCommandHandler(event_store=event_store)
+    command = DebitWalletCommand(
+        wallet_id=wallet_id,
+        amount=request.amount,
+        transaction_id=transaction_id,
+    )
+    return WalletTransactionResponse(**handler.debit(command))
 
-@router.post("/{wallet_id}/buy")
+
+@router.post(
+    "/{wallet_id}/buy",
+    response_model=TradeResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Buy shares at the current market price",
+)
 async def buy_asset(
-    wallet_id: str, 
-    request: BuyRequest,
-    x_transaction_id: Optional[str] = Header(None)
-):
-    """Buy asset."""
-    try:
-        command = BuyAssetCommand(
-            wallet_id=wallet_id, 
-            symbol=request.symbol,
-            quantity=request.quantity,
-            transaction_id=x_transaction_id
-        )
-        handler = BuyAssetHandler()
-        return handler.handle(command)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        if "InsufficientFundsError" in str(type(e)) or "UnknownSymbolError" in str(type(e)):
-            raise HTTPException(status_code=409, detail=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+    wallet_id: WalletIdDep,
+    request: TradeRequest,
+    transaction_id: TransactionIdDep,
+    engine: OrderEngineDep,
+    market: MarketDep,
+    event_store: EventStoreDep,
+    positions: PositionRepoDep,
+    trades: TradeRepoDep,
+) -> TradeResponse:
+    handler = TradeCommandHandler(
+        engine,
+        market=market,
+        event_store=event_store,
+        position_repository=positions,
+        trade_repository=trades,
+    )
+    command = BuyAssetCommand(
+        wallet_id=wallet_id,
+        symbol=request.symbol,
+        quantity=request.quantity,
+        transaction_id=transaction_id,
+    )
+    return TradeResponse(**handler.buy(command))
 
-@router.post("/{wallet_id}/sell")
+
+@router.post(
+    "/{wallet_id}/sell",
+    response_model=TradeResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Sell shares at the current market price",
+)
 async def sell_asset(
-    wallet_id: str, 
-    request: SellRequest,
-    x_transaction_id: Optional[str] = Header(None)
-):
-    """Sell asset."""
-    try:
-        command = SellAssetCommand(
-            wallet_id=wallet_id, 
-            symbol=request.symbol,
-            quantity=request.quantity,
-            transaction_id=x_transaction_id
-        )
-        handler = SellAssetHandler()
-        return handler.handle(command)
-    except ValueError as e:
-        raise HTTPException(status_code=400, detail=str(e))
-    except Exception as e:
-        if "InsufficientFundsError" in str(type(e)) or "UnknownSymbolError" in str(type(e)):
-            raise HTTPException(status_code=409, detail=str(e))
-        raise HTTPException(status_code=500, detail=str(e))
+    wallet_id: WalletIdDep,
+    request: TradeRequest,
+    transaction_id: TransactionIdDep,
+    engine: OrderEngineDep,
+    market: MarketDep,
+    event_store: EventStoreDep,
+    positions: PositionRepoDep,
+    trades: TradeRepoDep,
+) -> TradeResponse:
+    handler = TradeCommandHandler(
+        engine,
+        market=market,
+        event_store=event_store,
+        position_repository=positions,
+        trade_repository=trades,
+    )
+    command = SellAssetCommand(
+        wallet_id=wallet_id,
+        symbol=request.symbol,
+        quantity=request.quantity,
+        transaction_id=transaction_id,
+    )
+    return TradeResponse(**handler.sell(command))

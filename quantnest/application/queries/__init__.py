@@ -1,19 +1,17 @@
-"""Query services for QuantNest."""
+"""Query DTOs for the read side of the application layer."""
 
-from .history_service import HistoryService
 from .history_dtos import (
-    TradeHistoryItem,
     OrderHistoryItem,
-    WalletEventItem,
+    PaginatedResponse,
     TimelineEvent,
-    PaginatedResponse
+    TradeHistoryItem,
+    WalletEventItem,
 )
 
 __all__ = [
-    "HistoryService",
     "TradeHistoryItem",
     "OrderHistoryItem",
     "WalletEventItem",
     "TimelineEvent",
-    "PaginatedResponse"
+    "PaginatedResponse",
 ]

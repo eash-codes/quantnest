@@ -1,247 +1,275 @@
-"""Market data API - Live quotes and stock search using yfinance."""
+"""Market data API — quotes, charts and symbol search."""
 
-from fastapi import APIRouter, HTTPException
-from typing import Optional
-import yfinance as yf
-from decimal import Decimal
+from __future__ import annotations
+
+import logging
+import os
+from typing import Any, Dict, List, Optional
+
+from fastapi import APIRouter, Query
+
+from quantnest.api.deps import MarketDep
+from quantnest.domain.exceptions import UnknownSymbolError
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/market", tags=["market"])
 
-# Periods to try in order — wider periods survive weekends, holidays, and data gaps
-_FETCH_PERIODS = ["5d", "1mo", "3mo"]
+_FETCH_PERIODS = ("5d", "1mo", "3mo")
+
+_VALID_PERIODS = {"1d", "5d", "1mo", "3mo", "6mo", "1y", "2y", "5y", "10y", "ytd", "max"}
+_VALID_INTERVALS = {"1m", "5m", "15m", "30m", "1h", "1d", "1wk", "1mo"}
+
+_FALLBACK_SEARCH = [
+    {"symbol": "RELIANCE", "name": "Reliance Industries Ltd", "exchange": "NSE"},
+    {"symbol": "TCS", "name": "Tata Consultancy Services Ltd", "exchange": "NSE"},
+    {"symbol": "INFY", "name": "Infosys Ltd", "exchange": "NSE"},
+    {"symbol": "HDFCBANK", "name": "HDFC Bank Ltd", "exchange": "NSE"},
+    {"symbol": "ICICIBANK", "name": "ICICI Bank Ltd", "exchange": "NSE"},
+    {"symbol": "SBIN", "name": "State Bank of India", "exchange": "NSE"},
+    {"symbol": "AAPL", "name": "Apple Inc.", "exchange": "NASDAQ"},
+    {"symbol": "MSFT", "name": "Microsoft Corporation", "exchange": "NASDAQ"},
+]
+
+_EXCHANGE_LABELS = {
+    "NSI": "NSE",
+    "BOM": "BSE",
+    "NMS": "NASDAQ",
+    "NGM": "NASDAQ",
+    "NCM": "NASDAQ",
+    "NYQ": "NYSE",
+    "NYB": "NYSE",
+}
 
 
-def _fetch_history(ns_symbol: str):
+def _using_fake_market() -> bool:
+    return os.getenv("QUANTNEST_MARKET_PROVIDER", "yfinance").strip().lower() == "fake"
+
+
+def _synthetic_quote(symbol: str, market) -> Dict[str, Any]:
+    """Build a quote from the injected provider.
+
+    Used in ``fake`` mode and as a fallback when the live feed is unreachable,
+    so the trading loop stays exercisable offline.
     """
-    Fetch ticker history with progressive period escalation.
-    Tries 5d first; if empty (weekend/holiday gap) escalates to 1mo then 3mo.
-    Returns (ticker, hist, today_row, prev_close_row) or raises ValueError.
-    """
-    ticker = yf.Ticker(ns_symbol)
-    for period in _FETCH_PERIODS:
-        hist = ticker.history(period=period, interval="1d")
-        if not hist.empty and len(hist) >= 1:
-            # Use last two rows for LTP and prev_close
-            today = hist.iloc[-1]
-            prev_close = hist.iloc[-2]["Close"] if len(hist) > 1 else hist.iloc[-1]["Close"]
-            return ticker, hist, today, prev_close
-    raise ValueError(f"No price data available for {ns_symbol} across all periods")
+    price = float(market.get_price(symbol))
+    return {
+        "symbol": symbol,
+        "yf_symbol": f"{symbol}.NS",
+        "exchange": "NSE",
+        "ltp": price,
+        "open": price,
+        "high": price,
+        "low": price,
+        "prev_close": price,
+        "change": 0.0,
+        "change_pct": 0.0,
+        "volume": 0,
+        "week52_high": None,
+        "week52_low": None,
+        "market_cap": None,
+    }
 
 
-def _get_ticker_info(symbol: str) -> dict:
-    """
-    Fetch full ticker info for a symbol.
-    Tries SYMBOL.NS (NSE India) first; falls back to bare SYMBOL (US/global).
-    Uses escalating fetch periods to handle weekends and market holidays.
-    """
-    symbol = symbol.upper().strip()
-    last_error = None
+def _fetch_live_quote(symbol: str) -> Optional[Dict[str, Any]]:
+    """Fetch a full quote from Yahoo Finance, or ``None`` if unavailable."""
+    try:
+        import yfinance as yf
+    except ImportError:
+        return None
 
-    for ns_symbol in [symbol + ".NS", symbol]:
-        try:
-            ticker, hist, today, prev_close = _fetch_history(ns_symbol)
+    for candidate in (f"{symbol}.NS", symbol):
+        for period in _FETCH_PERIODS:
+            try:
+                ticker = yf.Ticker(candidate)
+                history = ticker.history(period=period, interval="1d")
+            except Exception as exc:
+                logger.debug(
+                    "Quote fetch failed",
+                    extra={"symbol": candidate, "period": period, "error": str(exc)},
+                )
+                continue
 
-            ltp        = round(float(today["Close"]),  2)
-            open_price = round(float(today["Open"]),   2)
-            high       = round(float(today["High"]),   2)
-            low        = round(float(today["Low"]),    2)
-            volume     = int(today["Volume"])
-            prev       = round(float(prev_close),      2)
-            change     = round(ltp - prev,             2)
-            change_pct = round((change / prev) * 100, 2) if prev else 0.0
+            if history.empty:
+                continue
 
-            # Optional extended info (fast_info can fail on some tickers)
+            latest = history.iloc[-1]
+            prev_close = float(
+                history.iloc[-2]["Close"] if len(history) > 1 else history.iloc[-1]["Close"]
+            )
+
+            ltp = round(float(latest["Close"]), 2)
+            prev = round(prev_close, 2)
+            change = round(ltp - prev, 2)
+
+            week52_high = week52_low = market_cap = None
             try:
                 fast = ticker.fast_info
-                week52_high = round(float(fast.year_high),  2)
-                week52_low  = round(float(fast.year_low),   2)
-                market_cap  = fast.market_cap
+                week52_high = round(float(fast.year_high), 2)
+                week52_low = round(float(fast.year_low), 2)
+                market_cap = fast.market_cap
             except Exception:
-                week52_high = None
-                week52_low  = None
-                market_cap  = None
+                pass
 
             return {
-                "symbol":      symbol,
-                "yf_symbol":   ns_symbol,          # shows RELIANCE.NS or MSFT for debug
-                "exchange":    "NSE" if ".NS" in ns_symbol else "GLOBAL",
-                "ltp":         ltp,
-                "open":        open_price,
-                "high":        high,
-                "low":         low,
-                "prev_close":  prev,
-                "change":      change,
-                "change_pct":  change_pct,
-                "volume":      volume,
+                "symbol": symbol,
+                "yf_symbol": candidate,
+                "exchange": "NSE" if candidate.endswith(".NS") else "GLOBAL",
+                "ltp": ltp,
+                "open": round(float(latest["Open"]), 2),
+                "high": round(float(latest["High"]), 2),
+                "low": round(float(latest["Low"]), 2),
+                "prev_close": prev,
+                "change": change,
+                "change_pct": round((change / prev) * 100, 2) if prev else 0.0,
+                "volume": int(latest["Volume"]),
                 "week52_high": week52_high,
-                "week52_low":  week52_low,
-                "market_cap":  market_cap,
+                "week52_low": week52_low,
+                "market_cap": market_cap,
             }
 
-        except ValueError as e:
-            last_error = str(e)
-            print(f"⚠️  market.py: {ns_symbol} → {e}, trying next suffix...")
-            continue
-        except Exception as e:
-            last_error = str(e)
-            print(f"⚠️  market.py: {ns_symbol} unexpected error → {e}")
-            continue
-
-    raise ValueError(f"Could not fetch data for '{symbol}': {last_error}")
+    return None
 
 
-@router.get("/quote/{symbol}")
-async def get_quote(symbol: str):
-    """
-    Get live market quote for an NSE/global symbol.
-    Example: GET /market/quote/RELIANCE
-    Handles weekends and holidays by escalating fetch period (5d → 1mo → 3mo).
-    """
-    try:
-        return _get_ticker_info(symbol)
-    except ValueError as e:
-        raise HTTPException(status_code=404, detail=str(e))
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch quote: {str(e)}")
+def _resolve_quote(symbol: str, market) -> Dict[str, Any]:
+    """Return a quote, preferring live data and falling back to the provider."""
+    symbol = symbol.upper().strip()
+
+    if not _using_fake_market():
+        live = _fetch_live_quote(symbol)
+        if live is not None:
+            return live
+
+    # Raises UnknownSymbolError if the provider cannot price the symbol.
+    return _synthetic_quote(symbol, market)
 
 
-@router.get("/chart/{symbol}")
-async def get_chart_data(symbol: str, period: str = "6mo", interval: str = "1d"):
-    """
-    Get historical OHLCV data for charting.
-    Returns array of dicts with: time, open, high, low, close, value (volume).
-    """
-    try:
-        ns_symbol = symbol.upper().strip()
-        ticker = yf.Ticker(ns_symbol)
-        hist = ticker.history(period=period, interval=interval)
-        
-        if hist.empty and ".NS" not in ns_symbol:
-            ns_symbol = ns_symbol + ".NS"
-            ticker = yf.Ticker(ns_symbol)
-            hist = ticker.history(period=period, interval=interval)
-            
-        if hist.empty:
-             raise ValueError(f"No historical data available for {symbol}")
-
-        data = []
-        for index, row in hist.iterrows():
-            dt = index.strftime("%Y-%m-%d") if interval == "1d" else int(index.timestamp())
-            data.append({
-                "time": dt,
-                "open": round(float(row["Open"]), 2),
-                "high": round(float(row["High"]), 2),
-                "low": round(float(row["Low"]), 2),
-                "close": round(float(row["Close"]), 2),
-                "value": int(row["Volume"])
-            })
-        return {"symbol": symbol, "data": data}
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=f"Failed to fetch chart data: {str(e)}")
+@router.get("/quote/{symbol}", summary="Live quote for a single symbol")
+async def get_quote(symbol: str, market: MarketDep) -> Dict[str, Any]:
+    return _resolve_quote(symbol, market)
 
 
-@router.get("/quotes")
-async def get_batch_quotes(symbols: str):
-    """
-    Get live quotes for multiple symbols at once.
-    Example: GET /market/quotes?symbols=RELIANCE,TCS,INFY
-    """
-    symbol_list = [s.strip().upper() for s in symbols.split(",") if s.strip()]
-    results = {}
-    for symbol in symbol_list:
+@router.get("/quotes", summary="Live quotes for several symbols")
+async def get_batch_quotes(
+    market: MarketDep,
+    symbols: str = Query(..., min_length=1, max_length=500, description="Comma-separated tickers"),
+) -> Dict[str, Any]:
+    requested = [s.strip().upper() for s in symbols.split(",") if s.strip()][:50]
+
+    results: Dict[str, Any] = {}
+    for symbol in requested:
         try:
-            results[symbol] = _get_ticker_info(symbol)
-        except Exception as e:
-            results[symbol] = {"symbol": symbol, "error": str(e), "ltp": None}
+            results[symbol] = _resolve_quote(symbol, market)
+        except UnknownSymbolError as exc:
+            results[symbol] = {"symbol": symbol, "ltp": None, "error": str(exc)}
+        except Exception:
+            logger.exception("Batch quote lookup failed", extra={"symbol": symbol})
+            results[symbol] = {
+                "symbol": symbol,
+                "ltp": None,
+                "error": "Quote temporarily unavailable",
+            }
+
     return results
 
 
-@router.get("/search")
-async def search_stocks(q: str):
-    """
-    Live stock search via Yahoo Finance (yfinance.Search).
-    Covers ALL NSE-listed stocks + global equities — no hardcoded list.
-    Falls back to a curated list only if Yahoo Finance is unreachable.
+@router.get("/chart/{symbol}", summary="Historical OHLCV series")
+async def get_chart_data(
+    symbol: str,
+    market: MarketDep,
+    period: str = Query("6mo", description="Look-back window"),
+    interval: str = Query("1d", description="Candle interval"),
+) -> Dict[str, Any]:
+    if period not in _VALID_PERIODS:
+        period = "6mo"
+    if interval not in _VALID_INTERVALS:
+        interval = "1d"
 
-    Exchange codes returned by Yahoo Finance:
-      NSI  = National Stock Exchange of India (NSE)
-      BOM  = Bombay Stock Exchange (BSE)
-      NMS  = NASDAQ (US)
-      NYQ  = NYSE (US)
-    """
-    q = q.strip()
-    if not q:
-        return {"results": [], "query": q, "source": "none"}
+    symbol = symbol.upper().strip()
 
-    # ── 1. Live Yahoo Finance search ──────────────────────────────────────────
-    try:
-        search = yf.Search(q, news_count=0, max_results=20)
-        raw = search.quotes  # list[dict]
+    if not _using_fake_market():
+        try:
+            import yfinance as yf
 
-        results = []
-        for item in raw:
-            sym:      str = item.get("symbol", "")
-            name:     str = item.get("shortname") or item.get("longname") or sym
-            exchange: str = item.get("exchange", "")
-            qtype:    str = item.get("quoteType", "")
+            for candidate in (symbol, f"{symbol}.NS"):
+                history = yf.Ticker(candidate).history(period=period, interval=interval)
+                if history.empty:
+                    continue
 
-            # Only show equities (skip ETFs, mutual funds, indices, etc.)
-            # NSI = NSE India, BOM = BSE India, NMS = Nasdaq, NYQ = NYSE
-            if qtype not in ("EQUITY", "ETF"):
-                continue
+                data: List[Dict[str, Any]] = []
+                for index, row in history.iterrows():
+                    data.append(
+                        {
+                            "time": (
+                                index.strftime("%Y-%m-%d")
+                                if interval == "1d"
+                                else int(index.timestamp())
+                            ),
+                            "open": round(float(row["Open"]), 2),
+                            "high": round(float(row["High"]), 2),
+                            "low": round(float(row["Low"]), 2),
+                            "close": round(float(row["Close"]), 2),
+                            "value": int(row["Volume"]),
+                        }
+                    )
+                return {"symbol": symbol, "period": period, "interval": interval, "data": data}
+        except ImportError:
+            pass
+        except Exception:
+            logger.exception("Chart data fetch failed", extra={"symbol": symbol})
 
-            # Strip .NS / .BO suffix for display; store clean symbol
-            display_sym = sym.replace(".NS", "").replace(".BO", "")
+    # Offline / fake mode: confirm the symbol is priceable, return no candles.
+    market.get_price(symbol)
+    return {"symbol": symbol, "period": period, "interval": interval, "data": []}
 
-            # Tag with exchange for user clarity
-            if exchange in ("NSI",):
-                exch_label = "NSE"
-            elif exchange in ("BOM",):
-                exch_label = "BSE"
-            elif exchange in ("NMS", "NGM", "NCM"):
-                exch_label = "NASDAQ"
-            elif exchange in ("NYQ", "NYB"):
-                exch_label = "NYSE"
-            else:
-                exch_label = exchange
 
-            results.append({
-                "symbol":   display_sym,
-                "yf_symbol": sym,          # full yfinance symbol e.g. RELIANCE.NS
-                "name":     name,
-                "exchange": exch_label,
-                "type":     qtype,
-            })
+@router.get("/search", summary="Search for tradable instruments")
+async def search_stocks(
+    q: str = Query("", max_length=64, description="Search term"),
+) -> Dict[str, Any]:
+    query = q.strip()
+    if not query:
+        return {"results": [], "query": query, "source": "none"}
 
-        if results:
-            return {"results": results[:12], "query": q, "source": "yahoo_finance"}
+    if not _using_fake_market():
+        try:
+            import yfinance as yf
 
-    except Exception as e:
-        print(f"⚠️  Search: yfinance.Search failed for '{q}': {e}")
+            search = yf.Search(query, news_count=0, max_results=20)
+            results = []
 
-    # ── 2. Fallback: curated popular symbols (offline safety net) ─────────────
-    FALLBACK = [
-        {"symbol": "RELIANCE",   "name": "Reliance Industries Ltd",              "exchange": "NSE"},
-        {"symbol": "TCS",        "name": "Tata Consultancy Services Ltd",        "exchange": "NSE"},
-        {"symbol": "INFY",       "name": "Infosys Ltd",                          "exchange": "NSE"},
-        {"symbol": "HDFCBANK",   "name": "HDFC Bank Ltd",                        "exchange": "NSE"},
-        {"symbol": "ICICIBANK",  "name": "ICICI Bank Ltd",                       "exchange": "NSE"},
-        {"symbol": "SBIN",       "name": "State Bank of India",                  "exchange": "NSE"},
-        {"symbol": "LT",         "name": "Larsen & Toubro Ltd",                  "exchange": "NSE"},
-        {"symbol": "WIPRO",      "name": "Wipro Ltd",                            "exchange": "NSE"},
-        {"symbol": "BHARTIARTL", "name": "Bharti Airtel Ltd",                   "exchange": "NSE"},
-        {"symbol": "AXISBANK",   "name": "Axis Bank Ltd",                        "exchange": "NSE"},
-        {"symbol": "BAJFINANCE", "name": "Bajaj Finance Ltd",                    "exchange": "NSE"},
-        {"symbol": "MARUTI",     "name": "Maruti Suzuki India Ltd",              "exchange": "NSE"},
-        {"symbol": "TATAMOTORS", "name": "Tata Motors Ltd",                      "exchange": "NSE"},
-        {"symbol": "ZOMATO",     "name": "Zomato Ltd",                           "exchange": "NSE"},
-        {"symbol": "AAPL",       "name": "Apple Inc",                            "exchange": "NASDAQ"},
-        {"symbol": "MSFT",       "name": "Microsoft Corporation",                "exchange": "NASDAQ"},
-        {"symbol": "GOOGL",      "name": "Alphabet Inc",                         "exchange": "NASDAQ"},
-        {"symbol": "NVDA",       "name": "NVIDIA Corporation",                   "exchange": "NASDAQ"},
-        {"symbol": "TSLA",       "name": "Tesla Inc",                            "exchange": "NASDAQ"},
-        {"symbol": "META",       "name": "Meta Platforms Inc",                   "exchange": "NASDAQ"},
+            for item in search.quotes:
+                quote_type = item.get("quoteType", "")
+                if quote_type not in ("EQUITY", "ETF"):
+                    continue
+
+                raw_symbol = item.get("symbol", "")
+                exchange = item.get("exchange", "")
+
+                results.append(
+                    {
+                        "symbol": raw_symbol.replace(".NS", "").replace(".BO", ""),
+                        "yf_symbol": raw_symbol,
+                        "name": item.get("shortname") or item.get("longname") or raw_symbol,
+                        "exchange": _EXCHANGE_LABELS.get(exchange, exchange),
+                        "type": quote_type,
+                    }
+                )
+
+            if results:
+                return {"results": results[:12], "query": query, "source": "yahoo_finance"}
+        except ImportError:
+            pass
+        except Exception as exc:
+            logger.warning(
+                "Symbol search failed; using the offline list",
+                extra={"query": query, "error": str(exc)},
+            )
+
+    needle = query.upper()
+    matches = [
+        {**entry, "yf_symbol": f"{entry['symbol']}.NS", "type": "EQUITY"}
+        for entry in _FALLBACK_SEARCH
+        if needle in entry["symbol"] or needle in entry["name"].upper()
     ]
-    q_up = q.upper()
-    filtered = [s for s in FALLBACK if q_up in s["symbol"] or q_up in s["name"].upper()]
-    return {"results": filtered[:12], "query": q, "source": "fallback_list"}
+    return {"results": matches[:12], "query": query, "source": "offline"}

@@ -1,14 +1,18 @@
-"""DTOs for history and timeline queries."""
+"""DTOs for history and timeline queries (Pydantic v2)."""
+
+from __future__ import annotations
 
 from datetime import datetime
-from decimal import Decimal
-from typing import Optional, Dict, Any, Literal
-from pydantic import BaseModel, Field
+from typing import Any, Dict, List, Literal, Optional
+
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class TradeHistoryItem(BaseModel):
-    """Single trade history item."""
-    
+    """A single executed trade."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     trade_id: str
     wallet_id: str
     symbol: str
@@ -17,70 +21,52 @@ class TradeHistoryItem(BaseModel):
     price: float
     total_value: float
     timestamp: datetime
-    
-    class Config:
-        json_encoders = {
-            Decimal: lambda v: float(v),
-            datetime: lambda v: v.isoformat()
-        }
 
 
 class OrderHistoryItem(BaseModel):
-    """Single order history item."""
-    
+    """A single order and its current status."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     order_id: str
     wallet_id: str
     symbol: str
     side: Literal["BUY", "SELL"]
     quantity: float
-    order_type: Literal["MARKET", "LIMIT"]
-    status: Literal["PENDING", "FILLED", "REJECTED", "CANCELLED"]
+    order_type: Literal["MARKET", "LIMIT", "STOP_LOSS"]
+    status: Literal["PENDING", "FILLED", "REJECTED", "CANCELLED", "PARTIAL"]
     price: Optional[float] = None
     timestamp: datetime
-    
-    class Config:
-        json_encoders = {
-            Decimal: lambda v: float(v),
-            datetime: lambda v: v.isoformat()
-        }
 
 
 class WalletEventItem(BaseModel):
-    """Single wallet event item."""
-    
+    """A single ledger entry."""
+
+    model_config = ConfigDict(from_attributes=True)
+
     event_id: str
     wallet_id: str
     event_type: Literal["FundsCredited", "FundsDebited"]
     amount: float
     transaction_id: str
     timestamp: datetime
-    
-    class Config:
-        json_encoders = {
-            Decimal: lambda v: float(v),
-            datetime: lambda v: v.isoformat()
-        }
 
 
 class TimelineEvent(BaseModel):
-    """Unified timeline event."""
-    
-    event_type: Literal["wallet_credit", "wallet_debit", "trade_executed", "order_placed", "order_filled", "order_rejected"]
+    """A unified activity-feed entry."""
+
+    model_config = ConfigDict(from_attributes=True)
+
+    event_type: str
     timestamp: datetime
     wallet_id: str
-    metadata: Dict[str, Any]
-    
-    class Config:
-        json_encoders = {
-            Decimal: lambda v: float(v),
-            datetime: lambda v: v.isoformat()
-        }
+    metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 class PaginatedResponse(BaseModel):
-    """Paginated response wrapper."""
-    
-    items: list
+    """Envelope for every paginated list endpoint."""
+
+    items: List[Any] = Field(default_factory=list)
     total: int
     limit: int
     offset: int

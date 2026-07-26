@@ -1,193 +1,216 @@
-"""Portfolio manages asset positions, delegates money to Wallet."""
+"""Portfolio — manages asset positions and delegates all money to the Wallet.
+
+Persistence and pricing arrive through the ports in :mod:`quantnest.domain.ports`,
+so this module imports nothing from the infrastructure or web layers.
+"""
+
+from __future__ import annotations
 
 import uuid
 from decimal import Decimal, ROUND_HALF_UP
-from typing import Dict, List
+from typing import Dict, List, Optional
 
-from .wallet import Wallet
+from .exceptions import InsufficientPositionsError, ValidationError
 from .market import MarketProvider
+from .ports import (
+    EventStore,
+    InMemoryPositionRepository,
+    InMemoryTradeRepository,
+    MarketDataProvider,
+    PositionRepository,
+    TradeRepository,
+)
 from .trade import Trade
-from quantnest.infra.storage import load_positions, save_positions, load_trades, save_trade
+from .wallet import Wallet
 
-# Money formatting (2 decimal places, round half up)
 MONEY = Decimal("0.01")
 
 
-def _money(x: Decimal) -> Decimal:
-    """Round money-like values to 2 decimal places."""
-    return x.quantize(MONEY, rounding=ROUND_HALF_UP)
+def _money(value: Decimal) -> Decimal:
+    """Round a money-like value to two decimal places."""
+    return value.quantize(MONEY, rounding=ROUND_HALF_UP)
 
 
 class Portfolio:
-    def __init__(self, wallet_id: str, market: MarketProvider):
-        self._wallet = Wallet(wallet_id)
-        self._market = market
+    """Aggregate combining a cash :class:`Wallet` with asset positions."""
+
+    def __init__(
+        self,
+        wallet_id: str,
+        market: Optional[MarketDataProvider] = None,
+        *,
+        event_store: Optional[EventStore] = None,
+        position_repository: Optional[PositionRepository] = None,
+        trade_repository: Optional[TradeRepository] = None,
+        wallet: Optional[Wallet] = None,
+    ) -> None:
         self._wallet_id = wallet_id
-        
-        # Load existing positions from storage
-        loaded_positions = load_positions(wallet_id)
+        self._market: MarketDataProvider = market or MarketProvider()
+        self._positions_repo: PositionRepository = (
+            position_repository or InMemoryPositionRepository()
+        )
+        self._trades_repo: TradeRepository = trade_repository or InMemoryTradeRepository()
+
+        self._wallet = wallet or Wallet(wallet_id, event_store=event_store)
+
+        loaded = self._positions_repo.load_positions(wallet_id)
         self._positions: Dict[str, Decimal] = {
-            symbol: Decimal(str(quantity)) 
-            for symbol, quantity in loaded_positions.items()
+            symbol: Decimal(str(quantity)) for symbol, quantity in loaded.items()
         }
-        
-        # Load existing trades from storage
-        self._trades: List[Trade] = load_trades(wallet_id)
+        self._trades: List[Trade] = list(self._trades_repo.load_trades(wallet_id))
+
+    # ── Accessors ────────────────────────────────────────────────────────
 
     @property
     def wallet(self) -> Wallet:
-        """Public access to wallet (read-only reference)."""
         return self._wallet
 
     @property
     def positions(self) -> Dict[str, Decimal]:
-        return self._positions.copy()
+        return dict(self._positions)
 
     @property
     def trades(self) -> List[Trade]:
-        return self._trades.copy()
+        return list(self._trades)
 
-    def buy(self, symbol: str, quantity: Decimal, transaction_id: str = None) -> None:
-        """Buy quantity of symbol if sufficient funds exist."""
-        if quantity <= 0:
-            raise ValueError("Quantity must be positive")
+    # ── Commands ─────────────────────────────────────────────────────────
 
-        # DAY 5: Generate unique transaction ID (your UPI receipt)
+    def buy(self, symbol: str, quantity: Decimal, transaction_id: Optional[str] = None) -> Trade:
+        """Buy ``quantity`` of ``symbol``, debiting the wallet."""
+        quantity = self._validate_quantity(quantity)
         tx_id = transaction_id or str(uuid.uuid4())
 
         price = self._market.get_price(symbol)
         cost = price * quantity
 
-        # Pass transaction_id to wallet → idempotent & safe!
-        self.wallet.debit(cost, transaction_id=tx_id)
-        self._positions[symbol] = self._positions.get(symbol, Decimal("0")) + quantity
-        self._trades.append(Trade(symbol, "BUY", quantity, price))
-        
-        # Persist positions to storage
-        self._save_positions()
-        
-    def _save_positions(self):
-        """Save current positions and trades to storage."""
-        positions_dict = {symbol: float(quantity) for symbol, quantity in self._positions.items()}
-        # Remove zero quantities
-        positions_dict = {k: v for k, v in positions_dict.items() if v > 0}
-        save_positions(self._wallet_id, positions_dict)
-        
-        # Save all trades to storage
-        for trade in self._trades:
-            save_trade(self._wallet_id, trade)
+        # Debit first: it enforces the funds check and is idempotent.
+        self._wallet.debit(cost, transaction_id=tx_id)
 
-    def sell(self, symbol: str, quantity: Decimal, transaction_id: str = None) -> None:
-        """Sell quantity of symbol if owned."""
-        if quantity <= 0:
-            raise ValueError("Quantity must be positive")
+        self._positions[symbol] = self._positions.get(symbol, Decimal("0")) + quantity
+        trade = Trade(symbol, "BUY", quantity, price)
+        self._trades.append(trade)
+
+        self._persist(trade)
+        return trade
+
+    def sell(self, symbol: str, quantity: Decimal, transaction_id: Optional[str] = None) -> Trade:
+        """Sell ``quantity`` of ``symbol``, crediting the wallet."""
+        quantity = self._validate_quantity(quantity)
 
         owned = self._positions.get(symbol, Decimal("0"))
         if quantity > owned:
-            raise ValueError(f"Cannot sell {quantity}, own only {owned}")
+            raise InsufficientPositionsError(
+                f"Cannot sell {quantity} of {symbol}; only {owned} held"
+            )
 
-        # DAY 5: Generate unique transaction ID
         tx_id = transaction_id or str(uuid.uuid4())
 
         price = self._market.get_price(symbol)
         proceeds = price * quantity
 
-        # Pass transaction_id to wallet → idempotent & safe!
-        self.wallet.credit(proceeds, transaction_id=tx_id)
-        self._positions[symbol] = owned - quantity
-        if self._positions[symbol] == 0:
-            del self._positions[symbol]
-        self._trades.append(Trade(symbol, "SELL", quantity, price))
-        
-        # Persist positions to storage
-        self._save_positions()
+        self._wallet.credit(proceeds, transaction_id=tx_id)
 
-    # ==================================================
-    # DAY 4: READ-ONLY ANALYTICS (No side effects)
-    # ==================================================
+        remaining = owned - quantity
+        if remaining == 0:
+            self._positions.pop(symbol, None)
+        else:
+            self._positions[symbol] = remaining
+
+        trade = Trade(symbol, "SELL", quantity, price)
+        self._trades.append(trade)
+
+        self._persist(trade)
+        return trade
+
+    # ── Analytics (read-only, no side effects) ───────────────────────────
 
     def cash(self) -> Decimal:
-        """Cash balance (wallet.balance rounded)."""
-        return _money(self.wallet.balance)
+        return _money(self._wallet.balance)
 
     def asset_value(self, symbol: str) -> Decimal:
-        """Market value of single asset position."""
-        qty = self._positions.get(symbol, Decimal("0"))
-        price = self._market.get_price(symbol)
-        return _money(qty * price)
+        quantity = self._positions.get(symbol, Decimal("0"))
+        return _money(quantity * self._market.get_price(symbol))
 
     def asset_values(self) -> Dict[str, Decimal]:
-        """Market value of all asset positions."""
-        return {sym: self.asset_value(sym) for sym in self._positions}
+        return {symbol: self.asset_value(symbol) for symbol in self._positions}
 
     def total_asset_value(self) -> Decimal:
-        """Sum of all asset market values."""
         return _money(sum(self.asset_values().values(), start=Decimal("0")))
 
     def total_value(self) -> Decimal:
-        """Cash + total asset value."""
         return _money(self.cash() + self.total_asset_value())
 
     def avg_cost(self, symbol: str) -> Decimal:
-        """Average purchase price (weighted by quantity)."""
-        bought_qty = Decimal("0")
+        """Quantity-weighted average price across all BUY trades."""
+        bought_quantity = Decimal("0")
         bought_cost = Decimal("0")
-        for t in self._trades:
-            if t.symbol == symbol and t.side == "BUY":
-                bought_qty += t.quantity
-                bought_cost += t.quantity * t.price
-        return Decimal("0.00") if bought_qty == 0 else _money(bought_cost / bought_qty)
+
+        for trade in self._trades:
+            if trade.symbol == symbol and trade.side == "BUY":
+                bought_quantity += trade.quantity
+                bought_cost += trade.quantity * trade.price
+
+        if bought_quantity == 0:
+            return Decimal("0.00")
+        return _money(bought_cost / bought_quantity)
 
     def unrealized_pnl(self, symbol: str) -> Decimal:
-        """Unrealized P&L = (current_price - avg_cost) * current_qty."""
-        qty = self._positions.get(symbol, Decimal("0"))
-        if qty == 0:
+        quantity = self._positions.get(symbol, Decimal("0"))
+        if quantity == 0:
             return Decimal("0.00")
         price = self._market.get_price(symbol)
-        cost = self.avg_cost(symbol)
-        return _money((price - cost) * qty)
+        return _money((price - self.avg_cost(symbol)) * quantity)
 
     def unrealized_pnl_all(self) -> Dict[str, Decimal]:
-        """Unrealized P&L for all positions."""
-        return {sym: self.unrealized_pnl(sym) for sym in self._positions}
+        return {symbol: self.unrealized_pnl(symbol) for symbol in self._positions}
 
     def allocations(self) -> Dict[str, Decimal]:
-        """Asset allocation as % of total portfolio value."""
+        """Each asset's share of total portfolio value, plus cash."""
         total = self.total_value()
         if total == 0:
             return {"cash": Decimal("0.00")}
-        
-        alloc: Dict[str, Decimal] = {"cash": _money(self.cash() / total)}
-        for sym, val in self.asset_values().items():
-            alloc[sym] = _money(val / total)
-        return alloc
+
+        allocations: Dict[str, Decimal] = {"cash": _money(self.cash() / total)}
+        for symbol, value in self.asset_values().items():
+            allocations[symbol] = _money(value / total)
+        return allocations
 
     def health_signals(
         self,
         max_asset_pct: Decimal = Decimal("0.40"),
         min_cash_pct: Decimal = Decimal("0.10"),
     ) -> List[str]:
-        """Rule-based portfolio health warnings."""
+        """Rule-based risk warnings for the dashboard."""
         signals: List[str] = []
-        try:
-            alloc = self.allocations()
-        except Exception:
-            return ["⚠️ Could not compute allocations (price data unavailable for some symbols)"]
 
-        # Concentration risk
-        for sym, pct in alloc.items():
-            try:
-                if sym != "cash" and pct > max_asset_pct:
-                    signals.append(f"⚠️ High concentration in {sym}: {pct:.1%}")
-            except Exception:
-                continue  # skip symbols with NaN/invalid allocation
-
-        # Liquidity risk
         try:
-            cash_pct = alloc.get("cash", Decimal("0.00"))
-            if cash_pct < min_cash_pct:
-                signals.append(f"⚠️ Low cash buffer: {cash_pct:.1%}")
+            allocations = self.allocations()
         except Exception:
-            pass
+            return ["Could not compute allocations; price data is unavailable for some symbols"]
+
+        for symbol, pct in allocations.items():
+            if symbol != "cash" and pct > max_asset_pct:
+                signals.append(f"High concentration in {symbol}: {pct:.1%}")
+
+        cash_pct = allocations.get("cash", Decimal("0.00"))
+        if cash_pct < min_cash_pct:
+            signals.append(f"Low cash buffer: {cash_pct:.1%}")
 
         return signals
+
+    # ── internals ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _validate_quantity(quantity: Decimal) -> Decimal:
+        value = quantity if isinstance(quantity, Decimal) else Decimal(str(quantity))
+        if value <= 0:
+            raise ValidationError("Quantity must be positive")
+        return value
+
+    def _persist(self, trade: Trade) -> None:
+        """Write positions and the newly executed trade through the ports."""
+        positions = {
+            symbol: quantity for symbol, quantity in self._positions.items() if quantity > 0
+        }
+        self._positions_repo.save_positions(self._wallet_id, positions)
+        self._trades_repo.save_trade(self._wallet_id, trade)

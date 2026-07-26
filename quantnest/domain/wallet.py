@@ -1,77 +1,101 @@
-"""Wallet - TRUE FINANCIAL LEDGER (Day 5).
-Balance derived 100% from events. Idempotent. Replay-safe."""
+"""Wallet — an event-sourced financial ledger.
+
+The balance is never stored; it is always derived by replaying the immutable
+event log. Credits and debits are idempotent on ``transaction_id``, so a
+retried request can never double-apply.
+
+The wallet depends on the :class:`EventStore` *port*, not on any concrete
+storage module, which keeps this layer free of infrastructure imports.
+"""
+
+from __future__ import annotations
 
 import uuid
 from decimal import Decimal
-from typing import List
+from typing import List, Optional
+
 from .events import DomainEvent, FundsCredited, FundsDebited
-from quantnest.infra.storage import load_events, append_event
-
-
-class InsufficientFundsError(Exception):
-    """Business rule: can't spend what you don't have."""
+from .exceptions import InsufficientFundsError
+from .ports import EventStore, InMemoryEventStore
 
 
 class Wallet:
-    def __init__(self, wallet_id: str):
+    """Aggregate root for money movement."""
+
+    def __init__(self, wallet_id: str, event_store: Optional[EventStore] = None) -> None:
         self._wallet_id = wallet_id
-        self._events = load_events(self._wallet_id)
-        self._replay_events()  # Balance derived from events
+        self._event_store: EventStore = event_store or InMemoryEventStore()
+        self._events: List[DomainEvent] = list(self._event_store.load_events(wallet_id))
+        self._balance = Decimal("0")
+        self._replay_events()
+
+    @property
+    def wallet_id(self) -> str:
+        return self._wallet_id
 
     @property
     def balance(self) -> Decimal:
-        """Current balance - ALWAYS replayed from events."""
+        """Current balance, always derived from the event log."""
         return self._balance
 
     @property
     def events(self) -> List[DomainEvent]:
-        """Immutable audit trail - complete movie of all transactions."""
-        return self._events.copy()
+        """Copy of the immutable audit trail."""
+        return list(self._events)
 
-    def credit(self, amount: Decimal, transaction_id: str = None) -> None:
-        """Add money - idempotent (safe to retry same payment)."""
-        if amount <= 0:
-            raise ValueError("Amount must be positive")
-
+    def credit(self, amount: Decimal, transaction_id: Optional[str] = None) -> None:
+        """Add funds. Safe to retry with the same ``transaction_id``."""
+        amount = self._validate_amount(amount)
         tx_id = transaction_id or str(uuid.uuid4())
 
-        # ← DAY 5: Skip if already processed (no double credit!)
-        if any(e.transaction_id == tx_id for e in self._events):
-            return  # Idempotent!
+        if self._already_processed(tx_id):
+            return
 
         event = FundsCredited(amount=amount, transaction_id=tx_id)
-        self._events.append(event)
-        append_event(event, self._wallet_id)
-        self._replay_events()  # Recompute balance from ALL events
+        self._record(event)
 
-    def debit(self, amount: Decimal, transaction_id: str = None) -> None:
-        """Spend money - check balance FIRST, then append event."""
-        if amount <= 0:
-            raise ValueError("Amount must be positive")
+    def debit(self, amount: Decimal, transaction_id: Optional[str] = None) -> None:
+        """Remove funds, refusing to overdraw. Idempotent on ``transaction_id``."""
+        amount = self._validate_amount(amount)
 
-        # Check balance BEFORE creating event
-        if amount > self.balance:
+        # Check funds before emitting an event so the ledger never goes negative.
+        if amount > self._balance:
             raise InsufficientFundsError(
-                f"Cannot debit ₹{amount} from ₹{self.balance}"
+                f"Cannot debit {amount} from a balance of {self._balance}"
             )
 
         tx_id = transaction_id or str(uuid.uuid4())
 
-        # ← DAY 5: Skip if already processed (no double debit!)
-        if any(e.transaction_id == tx_id for e in self._events):
-            return  # Idempotent!
+        if self._already_processed(tx_id):
+            return
 
         event = FundsDebited(amount=amount, transaction_id=tx_id)
+        self._record(event)
+
+    # ── internals ────────────────────────────────────────────────────────
+
+    @staticmethod
+    def _validate_amount(amount: Decimal) -> Decimal:
+        value = amount if isinstance(amount, Decimal) else Decimal(str(amount))
+        if value <= 0:
+            raise ValueError("Amount must be positive")
+        return value
+
+    def _already_processed(self, transaction_id: str) -> bool:
+        return any(event.transaction_id == transaction_id for event in self._events)
+
+    def _record(self, event: DomainEvent) -> None:
         self._events.append(event)
-        append_event(event, self._wallet_id)
-        self._replay_events()  # Recompute balance from ALL events
+        self._event_store.append_event(self._wallet_id, event)
+        self._replay_events()
 
     def _replay_events(self) -> None:
-        """MAGIC: Rebuild balance from events (delete _balance → replay)."""
-        self._balance = Decimal("0")
+        """Rebuild the balance from scratch by folding over every event."""
+        balance = Decimal("0")
         for event in self._events:
             amount = Decimal(event.payload["amount"])
             if event.event_type == "FundsCredited":
-                self._balance += amount
+                balance += amount
             elif event.event_type == "FundsDebited":
-                self._balance -= amount
+                balance -= amount
+        self._balance = balance

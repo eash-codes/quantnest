@@ -1,67 +1,114 @@
-"""Command handlers for wallet and portfolio operations."""
+"""Command handlers for wallet and trading operations.
 
-from decimal import Decimal
-from typing import Dict, Any
-from quantnest.domain.wallet import Wallet
-from quantnest.domain.market import MarketProvider
-from quantnest.domain.portfolio import Portfolio
-from quantnest.domain.order import OrderStatus
-from quantnest.domain.order_engine import OrderExecutionEngine
-from quantnest.application.commands.wallet_commands import CreditWalletCommand, DebitWalletCommand
+Each handler receives its collaborators by injection and returns a plain
+dictionary. Business-rule violations propagate as domain exceptions, which the
+API layer translates into HTTP responses.
+"""
+
+from __future__ import annotations
+
+import logging
+from typing import Any, Dict, Optional
+
 from quantnest.application.commands.portfolio_commands import BuyAssetCommand, SellAssetCommand
+from quantnest.application.commands.wallet_commands import CreditWalletCommand, DebitWalletCommand
+from quantnest.domain.order_engine import OrderExecutionEngine
+from quantnest.domain.portfolio import Portfolio
+from quantnest.domain.ports import (
+    EventStore,
+    MarketDataProvider,
+    PositionRepository,
+    TradeRepository,
+)
+from quantnest.domain.wallet import Wallet
+
+logger = logging.getLogger(__name__)
 
 
-class CreditWalletHandler:
-    """Handle credit wallet commands."""
-    
-    def handle(self, command: CreditWalletCommand) -> Dict[str, Any]:
-        """Execute credit command."""
-        wallet = Wallet(command.wallet_id)
+class WalletCommandHandler:
+    """Handles wallet credits and debits."""
+
+    def __init__(self, event_store: Optional[EventStore] = None) -> None:
+        self._event_store = event_store
+
+    def credit(self, command: CreditWalletCommand) -> Dict[str, Any]:
+        wallet = Wallet(command.wallet_id, event_store=self._event_store)
         wallet.credit(command.amount, command.transaction_id)
-        
+
+        logger.info(
+            "Wallet credited",
+            extra={
+                "wallet_id": command.wallet_id,
+                "amount": str(command.amount),
+                "transaction_id": command.transaction_id,
+            },
+        )
+
         return {
             "wallet_id": command.wallet_id,
             "amount": float(command.amount),
             "transaction_id": command.transaction_id,
             "new_balance": float(wallet.balance),
-            "message": f"Successfully credited ₹{command.amount} to wallet {command.wallet_id}"
+            "message": f"Credited {command.amount} to wallet {command.wallet_id}",
         }
 
-
-class DebitWalletHandler:
-    """Handle debit wallet commands."""
-    
-    def handle(self, command: DebitWalletCommand) -> Dict[str, Any]:
-        """Execute debit command."""
-        wallet = Wallet(command.wallet_id)
+    def debit(self, command: DebitWalletCommand) -> Dict[str, Any]:
+        wallet = Wallet(command.wallet_id, event_store=self._event_store)
         wallet.debit(command.amount, command.transaction_id)
-        
+
+        logger.info(
+            "Wallet debited",
+            extra={
+                "wallet_id": command.wallet_id,
+                "amount": str(command.amount),
+                "transaction_id": command.transaction_id,
+            },
+        )
+
         return {
             "wallet_id": command.wallet_id,
             "amount": float(command.amount),
             "transaction_id": command.transaction_id,
             "new_balance": float(wallet.balance),
-            "message": f"Successfully debited ₹{command.amount} from wallet {command.wallet_id}"
+            "message": f"Debited {command.amount} from wallet {command.wallet_id}",
         }
 
 
-class BuyAssetHandler:
-    """Handle buy asset commands using Order Execution Engine."""
-    
-    def handle(self, command: BuyAssetCommand) -> Dict[str, Any]:
-        """Execute buy command through order engine."""
-        engine = OrderExecutionEngine()
-        order = engine.place_order(
+class TradeCommandHandler:
+    """Handles buy and sell commands through the order execution engine."""
+
+    def __init__(
+        self,
+        engine: OrderExecutionEngine,
+        *,
+        market: Optional[MarketDataProvider] = None,
+        event_store: Optional[EventStore] = None,
+        position_repository: Optional[PositionRepository] = None,
+        trade_repository: Optional[TradeRepository] = None,
+    ) -> None:
+        self._engine = engine
+        self._market = market
+        self._event_store = event_store
+        self._position_repository = position_repository
+        self._trade_repository = trade_repository
+
+    def buy(self, command: BuyAssetCommand) -> Dict[str, Any]:
+        return self._execute(command, "BUY")
+
+    def sell(self, command: SellAssetCommand) -> Dict[str, Any]:
+        return self._execute(command, "SELL")
+
+    def _execute(self, command, side: str) -> Dict[str, Any]:
+        order = self._engine.place_order(
             wallet_id=command.wallet_id,
             symbol=command.symbol,
-            side="BUY",
+            side=side,
             quantity=command.quantity,
             order_type="MARKET",
-            transaction_id=command.transaction_id
+            transaction_id=command.transaction_id,
         )
-        
-        # Return order-based response
-        response = {
+
+        response: Dict[str, Any] = {
             "wallet_id": command.wallet_id,
             "symbol": command.symbol,
             "quantity": float(command.quantity),
@@ -69,65 +116,32 @@ class BuyAssetHandler:
             "order_id": order.order_id,
             "order_status": order.status,
         }
-        
+
         if order.is_rejected:
-            response["message"] = f"Order rejected: {order.rejection_reason}"
             response["success"] = False
-        else:
-            response["message"] = f"Successfully bought {command.quantity} shares of {command.symbol}"
-            response["success"] = True
-            
-            # Get updated portfolio summary
-            market = MarketProvider()
-            portfolio = Portfolio(command.wallet_id, market)
-            response["portfolio_summary"] = {
-                "cash": float(portfolio.cash()),
-                "total_value": float(portfolio.total_value()),
-                "positions": {k: float(v) for k, v in portfolio.positions.items()}
-            }
-        
-        return response
+            response["message"] = order.rejection_reason or "The order was rejected."
+            return response
 
+        verb = "Bought" if side == "BUY" else "Sold"
+        response["success"] = True
+        response["message"] = f"{verb} {command.quantity} {command.symbol}"
 
-class SellAssetHandler:
-    """Handle sell asset commands using Order Execution Engine."""
-    
-    def handle(self, command: SellAssetCommand) -> Dict[str, Any]:
-        """Execute sell command through order engine."""
-        engine = OrderExecutionEngine()
-        order = engine.place_order(
-            wallet_id=command.wallet_id,
-            symbol=command.symbol,
-            side="SELL",
-            quantity=command.quantity,
-            order_type="MARKET",
-            transaction_id=command.transaction_id
+        portfolio = Portfolio(
+            command.wallet_id,
+            self._market,
+            event_store=self._event_store,
+            position_repository=self._position_repository,
+            trade_repository=self._trade_repository,
         )
-        
-        # Return order-based response
-        response = {
-            "wallet_id": command.wallet_id,
-            "symbol": command.symbol,
-            "quantity": float(command.quantity),
-            "transaction_id": command.transaction_id,
-            "order_id": order.order_id,
-            "order_status": order.status,
+        response["portfolio_summary"] = {
+            "cash": float(portfolio.cash()),
+            "total_value": float(portfolio.total_value()),
+            "positions": {
+                symbol: float(quantity) for symbol, quantity in portfolio.positions.items()
+            },
         }
-        
-        if order.is_rejected:
-            response["message"] = f"Order rejected: {order.rejection_reason}"
-            response["success"] = False
-        else:
-            response["message"] = f"Successfully sold {command.quantity} shares of {command.symbol}"
-            response["success"] = True
-            
-            # Get updated portfolio summary
-            market = MarketProvider()
-            portfolio = Portfolio(command.wallet_id, market)
-            response["portfolio_summary"] = {
-                "cash": float(portfolio.cash()),
-                "total_value": float(portfolio.total_value()),
-                "positions": {k: float(v) for k, v in portfolio.positions.items()}
-            }
-        
+
         return response
+
+
+__all__ = ["WalletCommandHandler", "TradeCommandHandler"]

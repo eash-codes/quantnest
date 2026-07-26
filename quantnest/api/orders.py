@@ -1,146 +1,109 @@
-"""Order Management API endpoints - Day 8 OMS."""
+"""Order Management API."""
 
-from fastapi import APIRouter, HTTPException, Header, Query
-from decimal import Decimal
+from __future__ import annotations
+
+import logging
 from typing import Optional
 
-from quantnest.domain.order import OrderStatus
-from quantnest.domain.order_engine import OrderExecutionEngine
-from quantnest.application.queries import HistoryService
+from fastapi import APIRouter, Query, status
+
+from quantnest.api.deps import HistoryServiceDep, OrderEngineDep, TransactionIdDep, WalletIdDep
+from quantnest.api.schemas import OrderResponse, PlaceOrderRequest
+from quantnest.domain.exceptions import OrderNotFoundError
+from quantnest.domain.order import Order
+
+logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/orders", tags=["orders"])
 
-@router.post("/")
+
+def _to_response(order: Order) -> OrderResponse:
+    return OrderResponse(
+        order_id=order.order_id,
+        wallet_id=order.wallet_id,
+        symbol=order.symbol,
+        side=order.side,
+        quantity=float(order.quantity),
+        order_type=order.order_type,
+        status=order.status,
+        filled_quantity=float(order.filled_quantity),
+        average_fill_price=(
+            float(order.average_fill_price) if order.average_fill_price is not None else None
+        ),
+        rejection_reason=order.rejection_reason,
+        transaction_id=order.transaction_id,
+        timestamp=order.timestamp,
+    )
+
+
+@router.post(
+    "",
+    response_model=OrderResponse,
+    status_code=status.HTTP_201_CREATED,
+    summary="Place an order",
+)
 async def place_order(
-    wallet_id: str,
-    symbol: str,
-    side: str,
-    quantity: float,
-    order_type: str = Query(default="MARKET", description="MARKET, LIMIT, or STOP_LOSS"),
-    limit_price: Optional[float] = Query(None, description="Limit price for LIMIT orders"),
-    x_transaction_id: Optional[str] = Header(None, description="Idempotency key")
-):
-    """
-    Place a new order (BUY or SELL).
-    
-    - **wallet_id**: The wallet placing the order
-    - **symbol**: Asset symbol (e.g., RELIANCE, TCS)
-    - **side**: BUY or SELL
-    - **quantity**: Number of shares
-    - **order_type**: MARKET, LIMIT, or STOP_LOSS
-    - **limit_price**: Required for LIMIT orders
-    - **x_transaction_id**: Optional idempotency key
-    
-    Returns order with status (PENDING, FILLED, or REJECTED).
-    """
-    try:
-        engine = OrderExecutionEngine()
-        order = engine.place_order(
-            wallet_id=wallet_id,
-            symbol=symbol.upper(),
-            side=side.upper(),
-            quantity=Decimal(str(quantity)),
-            order_type=order_type,
-            limit_price=Decimal(str(limit_price)) if limit_price else None,
-            transaction_id=x_transaction_id
-        )
-        
-        return {
-            "order_id": order.order_id,
-            "wallet_id": order.wallet_id,
-            "symbol": order.symbol,
-            "side": order.side,
-            "quantity": float(order.quantity),
-            "order_type": order.order_type,
-            "status": order.status,
-            "filled_quantity": float(order.filled_quantity),
-            "average_fill_price": float(order.average_fill_price) if order.average_fill_price else None,
-            "rejection_reason": order.rejection_reason,
-            "transaction_id": order.transaction_id,
-            "timestamp": order.timestamp.isoformat()
-        }
-    except Exception as e:
-        error_msg = str(e)
-        if "InsufficientFundsError" in type(e).__name__:
-            raise HTTPException(status_code=409, detail=error_msg)
-        elif "InsufficientPositionsError" in type(e).__name__:
-            raise HTTPException(status_code=409, detail=error_msg)
-        elif "InvalidSymbolError" in type(e).__name__:
-            raise HTTPException(status_code=400, detail=error_msg)
-        elif "Quantity must be positive" in error_msg:
-            raise HTTPException(status_code=400, detail=error_msg)
-        else:
-            raise HTTPException(status_code=500, detail=error_msg)
+    request: PlaceOrderRequest,
+    transaction_id: TransactionIdDep,
+    engine: OrderEngineDep,
+) -> OrderResponse:
+    """Place a MARKET, LIMIT or STOP_LOSS order.
 
-@router.get("/{wallet_id}")
-async def get_orders(
-    wallet_id: str,
-    status: Optional[str] = Query(None, description="Filter by status (PENDING, FILLED, REJECTED)"),
-    symbol: Optional[str] = Query(None, description="Filter by symbol"),
-    limit: int = Query(50, ge=1, le=500, description="Number of items to return"),
-    offset: int = Query(0, ge=0, description="Number of items to skip")
-):
-    """Get order history for a wallet."""
-    try:
-        service = HistoryService()
-        result = service.get_orders(wallet_id, status=status, limit=limit, offset=offset)
-        return result.dict()
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.get("/{wallet_id}/{order_id}")
-async def get_order(wallet_id: str, order_id: str):
-    """Get a specific order by ID."""
-    try:
-        engine = OrderExecutionEngine()
-        order = engine.get_order(wallet_id, order_id)
-        
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
-        
-        return {
-            "order_id": order.order_id,
-            "wallet_id": order.wallet_id,
-            "symbol": order.symbol,
-            "side": order.side,
-            "quantity": float(order.quantity),
-            "order_type": order.order_type,
-            "status": order.status,
-            "filled_quantity": float(order.filled_quantity),
-            "average_fill_price": float(order.average_fill_price) if order.average_fill_price else None,
-            "rejection_reason": order.rejection_reason,
-            "timestamp": order.timestamp.isoformat()
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
-
-@router.post("/{wallet_id}/{order_id}/cancel")
-async def cancel_order(wallet_id: str, order_id: str):
+    Rejections are returned as an order carrying ``status=REJECTED`` and a
+    ``rejection_reason``, rather than as an HTTP error, so every attempt is
+    auditable.
     """
-    Cancel a pending or partially filled order.
-    
-    Only PENDING or PARTIAL orders can be cancelled.
-    """
-    try:
-        engine = OrderExecutionEngine()
-        order = engine.cancel_order(wallet_id, order_id)
-        
-        if not order:
-            raise HTTPException(status_code=404, detail="Order not found")
-        
-        return {
-            "order_id": order.order_id,
-            "wallet_id": order.wallet_id,
-            "symbol": order.symbol,
-            "status": order.status,
-            "message": "Order cancelled successfully"
-        }
-    except HTTPException:
-        raise
-    except Exception as e:
-        error_msg = str(e)
-        if "Cannot cancel" in error_msg:
-            raise HTTPException(status_code=409, detail=error_msg)
-        raise HTTPException(status_code=500, detail=str(e))
+    order = engine.place_order(
+        wallet_id=request.wallet_id,
+        symbol=request.symbol,
+        side=request.side,
+        quantity=request.quantity,
+        order_type=request.order_type,
+        limit_price=request.limit_price,
+        stop_price=request.stop_price,
+        transaction_id=transaction_id,
+    )
+    return _to_response(order)
+
+
+@router.get("/{wallet_id}", summary="List orders for a wallet")
+async def list_orders(
+    wallet_id: WalletIdDep,
+    service: HistoryServiceDep,
+    status_filter: Optional[str] = Query(
+        None, alias="status", max_length=16, description="Filter by order status"
+    ),
+    limit: int = Query(50, ge=1, le=500),
+    offset: int = Query(0, ge=0),
+) -> dict:
+    result = service.get_orders(wallet_id, status=status_filter, limit=limit, offset=offset)
+    return result.model_dump()
+
+
+@router.get("/{wallet_id}/{order_id}", response_model=OrderResponse, summary="Fetch one order")
+async def get_order(
+    wallet_id: WalletIdDep,
+    order_id: str,
+    engine: OrderEngineDep,
+) -> OrderResponse:
+    order = engine.get_order(wallet_id, order_id)
+    if order is None:
+        raise OrderNotFoundError(f"No order {order_id} exists for wallet {wallet_id}")
+    return _to_response(order)
+
+
+@router.post(
+    "/{wallet_id}/{order_id}/cancel",
+    response_model=OrderResponse,
+    summary="Cancel a pending order",
+)
+async def cancel_order(
+    wallet_id: WalletIdDep,
+    order_id: str,
+    engine: OrderEngineDep,
+) -> OrderResponse:
+    """Cancel an order. Only PENDING or PARTIAL orders may be cancelled."""
+    order = engine.cancel_order(wallet_id, order_id)
+    if order is None:
+        raise OrderNotFoundError(f"No order {order_id} exists for wallet {wallet_id}")
+    return _to_response(order)
