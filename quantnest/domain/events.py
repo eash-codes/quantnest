@@ -42,15 +42,17 @@ class FundsCredited(DomainEvent):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'FundsCredited':
-        # Handle backward compatibility: older events may not have transaction_id
-        transaction_id = data.get("transaction_id")
-        if transaction_id is None:
-            # For backward compatibility, generate a new transaction_id if not present
-            transaction_id = str(uuid.uuid4())
-        return cls(
+        transaction_id = data.get("transaction_id") or str(uuid.uuid4())
+        # ✅ Restore original timestamp from JSON — do NOT let default_factory run
+        ts_str = data.get("timestamp")
+        timestamp = datetime.fromisoformat(ts_str) if ts_str else datetime.now()
+        instance = cls(
             transaction_id=transaction_id,
             amount=Decimal(data["payload"]["amount"])
         )
+        # dataclass is NOT frozen, so we can overwrite the auto-generated timestamp
+        instance.timestamp = timestamp
+        return instance
 
 @dataclass(kw_only=True)
 class FundsDebited(DomainEvent):
@@ -62,12 +64,13 @@ class FundsDebited(DomainEvent):
 
     @classmethod
     def from_dict(cls, data: Dict[str, Any]) -> 'FundsDebited':
-        #  Handle backward compatibility: older events may not have transaction_id
-        transaction_id = data.get("transaction_id")
-        if transaction_id is None:
-            # For backward compatibility, generate a new transaction_id if not present
-            transaction_id = str(uuid.uuid4())
-        return cls(
+        transaction_id = data.get("transaction_id") or str(uuid.uuid4())
+        # ✅ Restore original timestamp from JSON — do NOT let default_factory run
+        ts_str = data.get("timestamp")
+        timestamp = datetime.fromisoformat(ts_str) if ts_str else datetime.now()
+        instance = cls(
             transaction_id=transaction_id,
             amount=Decimal(data["payload"]["amount"])
         )
+        instance.timestamp = timestamp
+        return instance

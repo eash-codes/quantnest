@@ -1,6 +1,7 @@
 """Enhanced storage with position and trade tracking for Day 7+."""
 
 import json
+import uuid
 from pathlib import Path
 from typing import List, Dict, Any
 from decimal import Decimal
@@ -65,7 +66,7 @@ def save_positions(wallet_id: str, positions: Dict[str, float]) -> None:
     pos_file.write_text(json.dumps(positions, indent=2))
 
 def load_trades(wallet_id: str) -> List[Trade]:
-    """Load persisted trades for a wallet."""
+    """Load persisted trades for a wallet, preserving original timestamp and trade_id."""
     trade_file = get_trade_file(wallet_id)
     try:
         if trade_file.exists():
@@ -78,7 +79,8 @@ def load_trades(wallet_id: str) -> List[Trade]:
                         side=t["side"],
                         quantity=Decimal(str(t["quantity"])),
                         price=Decimal(str(t["price"])),
-                        timestamp=datetime.fromisoformat(t["timestamp"])
+                        timestamp=datetime.fromisoformat(t["timestamp"]),
+                        trade_id=t.get("trade_id", str(uuid.uuid4()))
                     )
                     for t in trades_data
                 ]
@@ -87,33 +89,26 @@ def load_trades(wallet_id: str) -> List[Trade]:
         return []
 
 def save_trade(wallet_id: str, trade: Trade) -> None:
-    """Append a trade to the wallet's trade file."""
+    """Append a trade to the wallet's trade file. Dedup by trade_id."""
     trades = load_trades(wallet_id)
-    
-    # Check if trade already exists (by comparing all fields except timestamp precision)
-    trade_exists = any(
-        t.symbol == trade.symbol and
-        t.side == trade.side and
-        t.quantity == trade.quantity and
-        t.price == trade.price
-        for t in trades
-    )
-    
-    if trade_exists:
-        return  # Don't save duplicate trades
-    
+
+    # Deduplicate strictly by trade_id
+    if any(t.trade_id == trade.trade_id for t in trades):
+        return
+
     trades.append(trade)
-    
+
     trade_file = get_trade_file(wallet_id)
     trade_file.parent.mkdir(parents=True, exist_ok=True)
-    
+
     trades_data = [
         {
+            "trade_id": t.trade_id,
             "symbol": t.symbol,
             "side": t.side,
             "quantity": float(t.quantity),
             "price": float(t.price),
-            "timestamp": t.timestamp.isoformat() if hasattr(t.timestamp, 'isoformat') else datetime.now().isoformat()
+            "timestamp": t.timestamp.isoformat()
         }
         for t in trades
     ]

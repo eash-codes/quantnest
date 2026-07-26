@@ -1,0 +1,42 @@
+[
+  {
+    "trade_id": "6beb76b0-e9f8-4d30-8043-8e2e966a2622",
+    "symbol": "INFY",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 1276.8,
+    "timestamp": "2026-04-14T15:28:36.203638"
+  },
+  {
+    "trade_id": "fbaca33d-4064-4c99-b3b8-715b75591563",
+    "symbol": "INFY",
+    "side": "SELL",
+    "quantity": 1.0,
+    "price": 1276.8,
+    "timestamp": "2026-04-14T16:07:36.709806"
+  },
+  {
+    "trade_id": "d6ddb248-74a0-4ec6-8e6f-cc8f31cb54bc",
+    "symbol": "INFY",
+    "side": "BUY",
+    "quantity": 4.0,
+    "price": 1276.8,
+    "timestamp": "2026-04-14T16:07:53.809880"
+  },
+  {
+    "trade_id": "baadff30-e70c-4433-aba7-403e0becfbdd",
+    "symbol": "INFY",
+    "side": "BUY",
+    "quantity": 3.0,
+    "price": 1276.8,
+    "timestamp": "2026-04-14T16:07:59.282397"
+  },
+  {
+    "trade_id": "4fe4a54e-1280-4a4f-88e4-22fa1e6e3257",
+    "symbol": "INFY",
+    "side": "SELL",
+    "quantity": 7.0,
+    "price": 1315.7,
+    "timestamp": "2026-04-16T10:56:53.626564"
+  }
+]

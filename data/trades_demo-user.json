@@ -1,0 +1,202 @@
+[
+  {
+    "trade_id": "6ed97464-7810-4d0d-a52d-f3e798f1278d",
+    "symbol": "RELIANCE",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 2500.0,
+    "timestamp": "2026-04-14T14:14:17.009562"
+  },
+  {
+    "trade_id": "84991ee6-074e-49a3-ba9f-030803a891c3",
+    "symbol": "RELIANCE",
+    "side": "SELL",
+    "quantity": 1.0,
+    "price": 2500.0,
+    "timestamp": "2026-04-14T14:15:05.591810"
+  },
+  {
+    "trade_id": "663274b3-cef4-47c2-94d2-f730e51415eb",
+    "symbol": "RELIANCE",
+    "side": "SELL",
+    "quantity": 1.5,
+    "price": 2500.0,
+    "timestamp": "2026-04-14T14:15:30.652312"
+  },
+  {
+    "trade_id": "ab5e51f4-051a-41ab-8dc6-2eb028f59dd5",
+    "symbol": "RELIANCE",
+    "side": "SELL",
+    "quantity": 0.5,
+    "price": 2500.0,
+    "timestamp": "2026-04-14T14:17:01.760950"
+  },
+  {
+    "trade_id": "fc9e0518-8b57-4442-9d7f-d92d26ae95ca",
+    "symbol": "TCS",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 3800.0,
+    "timestamp": "2026-04-14T14:18:30.829524"
+  },
+  {
+    "trade_id": "ea8fbdae-24ca-47ba-9963-df7a9be83745",
+    "symbol": "TCS",
+    "side": "SELL",
+    "quantity": 1.0,
+    "price": 2472.6,
+    "timestamp": "2026-04-14T14:24:54.274315"
+  },
+  {
+    "trade_id": "48c8ee2d-852f-4edc-8f8f-e9e2ebefb166",
+    "symbol": "RELIANCE",
+    "side": "SELL",
+    "quantity": 1.0,
+    "price": 1315.1,
+    "timestamp": "2026-04-14T14:24:56.008213"
+  },
+  {
+    "trade_id": "7a805dc3-7d42-40b1-9282-f890c94c5372",
+    "symbol": "MSFT",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 384.37,
+    "timestamp": "2026-04-14T14:25:16.721805"
+  },
+  {
+    "trade_id": "091af472-5ddd-4841-85f7-6574ad79e822",
+    "symbol": "MSFT",
+    "side": "SELL",
+    "quantity": 1.0,
+    "price": 384.37,
+    "timestamp": "2026-04-14T14:25:27.120419"
+  },
+  {
+    "trade_id": "8eb5b455-ec48-4195-92ad-11373280a7d1",
+    "symbol": "RELIANCE",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 1315.1,
+    "timestamp": "2026-04-14T14:52:45.070018"
+  },
+  {
+    "trade_id": "0b4e54ee-21a4-40d9-bf9f-5a1d1785ca17",
+    "symbol": "RELIANCE",
+    "side": "BUY",
+    "quantity": 5.0,
+    "price": 1315.1,
+    "timestamp": "2026-04-14T14:55:55.939984"
+  },
+  {
+    "trade_id": "4ba95a9f-ebf3-4a6b-8731-e86a8064829f",
+    "symbol": "RELIANCE",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 2500.0,
+    "timestamp": "2026-04-14T14:14:17.009562"
+  },
+  {
+    "trade_id": "ff020f49-f0c1-4b43-9771-ef12780e599d",
+    "symbol": "RELIANCE",
+    "side": "SELL",
+    "quantity": 1.0,
+    "price": 2500.0,
+    "timestamp": "2026-04-14T14:15:05.591810"
+  },
+  {
+    "trade_id": "c507a191-ee55-4f66-a0ec-dee1c5c70875",
+    "symbol": "RELIANCE",
+    "side": "SELL",
+    "quantity": 1.5,
+    "price": 2500.0,
+    "timestamp": "2026-04-14T14:15:30.652312"
+  },
+  {
+    "trade_id": "003d347d-a46f-4040-942c-5c8a99af2796",
+    "symbol": "RELIANCE",
+    "side": "SELL",
+    "quantity": 0.5,
+    "price": 2500.0,
+    "timestamp": "2026-04-14T14:17:01.760950"
+  },
+  {
+    "trade_id": "d81f6707-e364-4afd-b05e-983e88f7725b",
+    "symbol": "TCS",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 3800.0,
+    "timestamp": "2026-04-14T14:18:30.829524"
+  },
+  {
+    "trade_id": "00cca601-a6d4-473d-92e2-50df3d31585c",
+    "symbol": "TCS",
+    "side": "SELL",
+    "quantity": 1.0,
+    "price": 2472.6,
+    "timestamp": "2026-04-14T14:24:54.274315"
+  },
+  {
+    "trade_id": "7d7364ec-0c78-4b20-9742-86dd1e3edef7",
+    "symbol": "RELIANCE",
+    "side": "SELL",
+    "quantity": 1.0,
+    "price": 1315.1,
+    "timestamp": "2026-04-14T14:24:56.008213"
+  },
+  {
+    "trade_id": "370351a0-6579-47b1-a836-667509a360e5",
+    "symbol": "MSFT",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 384.37,
+    "timestamp": "2026-04-14T14:25:16.721805"
+  },
+  {
+    "trade_id": "bc19dcf8-d60b-4cbd-b502-5b7f0c3d94bf",
+    "symbol": "MSFT",
+    "side": "SELL",
+    "quantity": 1.0,
+    "price": 384.37,
+    "timestamp": "2026-04-14T14:25:27.120419"
+  },
+  {
+    "trade_id": "bfdb7e32-d54b-454a-99c8-e453d5686425",
+    "symbol": "RELIANCE",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 1315.1,
+    "timestamp": "2026-04-14T14:52:45.070018"
+  },
+  {
+    "trade_id": "5d8e02b9-006d-4bcd-acfb-f24f11f82b83",
+    "symbol": "RELIANCE",
+    "side": "BUY",
+    "quantity": 5.0,
+    "price": 1315.1,
+    "timestamp": "2026-04-14T14:55:55.939984"
+  },
+  {
+    "trade_id": "a7a75a1f-a99f-46b3-afcd-43ed452484ac",
+    "symbol": "RELIANCE",
+    "side": "SELL",
+    "quantity": 6.0,
+    "price": 1315.1,
+    "timestamp": "2026-04-14T15:37:53.015063"
+  },
+  {
+    "trade_id": "ecef39c1-92d4-4c0d-bf7b-ebca7957334a",
+    "symbol": "RELIANCE",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 1315.1,
+    "timestamp": "2026-04-14T15:38:15.364545"
+  },
+  {
+    "trade_id": "c35ea766-937f-4d60-aa91-f0a5714ca511",
+    "symbol": "INFY",
+    "side": "BUY",
+    "quantity": 10.0,
+    "price": 1318.6,
+    "timestamp": "2026-04-16T10:38:33.598862"
+  }
+]

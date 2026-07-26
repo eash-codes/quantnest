@@ -1,0 +1,106 @@
+[
+  {
+    "trade_id": "9c5fb84c-dcd6-48f3-9997-6ee38b6088d9",
+    "symbol": "CROMPTON",
+    "side": "BUY",
+    "quantity": 10.0,
+    "price": 281.55,
+    "timestamp": "2026-01-01T10:30:00"
+  },
+  {
+    "trade_id": "a5a78b99-eb3b-4e05-895a-847253059159",
+    "symbol": "GOLDBEES",
+    "side": "BUY",
+    "quantity": 42.0,
+    "price": 91.48,
+    "timestamp": "2026-01-01T10:33:00"
+  },
+  {
+    "trade_id": "c33f1949-6275-4354-b130-1bc50114eaf8",
+    "symbol": "GRAVITA",
+    "side": "BUY",
+    "quantity": 2.0,
+    "price": 1551.2,
+    "timestamp": "2026-01-01T10:36:00"
+  },
+  {
+    "trade_id": "7749c45e-1fd5-4704-8b32-0dde28ae4458",
+    "symbol": "HINDUNILVR",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 2446.7,
+    "timestamp": "2026-01-01T10:39:00"
+  },
+  {
+    "trade_id": "468f7d2b-40d9-4023-8455-d74c48800480",
+    "symbol": "INFY",
+    "side": "BUY",
+    "quantity": 9.0,
+    "price": 1533.81,
+    "timestamp": "2026-01-01T10:42:00"
+  },
+  {
+    "trade_id": "0d0d86e7-333c-4689-993b-34c622bbb50f",
+    "symbol": "LT",
+    "side": "BUY",
+    "quantity": 1.0,
+    "price": 3483.1,
+    "timestamp": "2026-01-01T10:45:00"
+  },
+  {
+    "trade_id": "f7d6e84f-dc7e-4761-9d7a-c5e45d0d5a51",
+    "symbol": "NIFTYBEES",
+    "side": "BUY",
+    "quantity": 15.0,
+    "price": 269.45,
+    "timestamp": "2026-01-01T10:48:00"
+  },
+  {
+    "trade_id": "a3d87cc8-e6ba-4fb1-a58a-27a35c13b07e",
+    "symbol": "NMDC",
+    "side": "BUY",
+    "quantity": 169.0,
+    "price": 76.14,
+    "timestamp": "2026-01-01T10:51:00"
+  },
+  {
+    "trade_id": "1338f4ca-a357-4e9f-baf6-78a32b1ac7da",
+    "symbol": "NUCLEUS",
+    "side": "BUY",
+    "quantity": 2.0,
+    "price": 992.77,
+    "timestamp": "2026-01-01T10:54:00"
+  },
+  {
+    "trade_id": "88f8b953-93fc-4c29-a263-a80a5067ff3d",
+    "symbol": "PSUBNKBEES",
+    "side": "BUY",
+    "quantity": 208.0,
+    "price": 74.26,
+    "timestamp": "2026-01-01T10:57:00"
+  },
+  {
+    "trade_id": "39b09d05-96e9-45b9-90d6-d6595879eae4",
+    "symbol": "SUNPHARMA",
+    "side": "BUY",
+    "quantity": 2.0,
+    "price": 1688.5,
+    "timestamp": "2026-01-01T11:00:00"
+  },
+  {
+    "trade_id": "7d862e0a-8445-4c3b-91bb-f839eeca5f00",
+    "symbol": "TATAPOWER",
+    "side": "BUY",
+    "quantity": 9.0,
+    "price": 401.15,
+    "timestamp": "2026-01-01T11:03:00"
+  },
+  {
+    "trade_id": "0f42e5e0-8bb1-42ed-ba3e-fbc0d390dcc2",
+    "symbol": "WAAREERTL",
+    "side": "BUY",
+    "quantity": 5.0,
+    "price": 1188.8,
+    "timestamp": "2026-01-01T11:06:00"
+  }
+]

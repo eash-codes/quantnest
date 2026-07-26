@@ -44,7 +44,7 @@ class HistoryService:
         
         items = [
             TradeHistoryItem(
-                trade_id=f"trade-{wallet_id}-{idx}",
+                trade_id=t.trade_id,
                 wallet_id=wallet_id,
                 symbol=t.symbol,
                 side=t.side,

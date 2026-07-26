@@ -18,7 +18,9 @@ class PortfolioService:
             "cash": float(portfolio.cash()),
             "total_asset_value": float(portfolio.total_asset_value()),
             "total_value": float(portfolio.total_value()),
-            "positions": portfolio.positions.copy(),
+            "positions": {sym: float(qty) for sym, qty in portfolio.positions.items()},
+            "asset_values": {sym: float(val) for sym, val in portfolio.asset_values().items()},
+            "avg_cost": {sym: float(portfolio.avg_cost(sym)) for sym in portfolio.positions},
             "unrealized_pnl": {
                 sym: float(pnl) for sym, pnl in portfolio.unrealized_pnl_all().items()
             },

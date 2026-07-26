@@ -1,0 +1,254 @@
+[
+  {
+    "event_id": "1e5ac7d3-dc12-4a83-8c12-1a73915f97b7",
+    "timestamp": "2025-12-31T10:30:00",
+    "event_type": "FundsCredited",
+    "transaction_id": "1d31d212-1f57-4fec-8175-5225243647f5",
+    "payload": {
+      "amount": "200000.0"
+    }
+  },
+  {
+    "event_id": "6e6a2c1f-219b-4bb4-8913-5d84f525718a",
+    "timestamp": "2026-01-01T10:30:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "9fac9a40-83f6-4da5-8a5f-9e5216a36fc8",
+    "payload": {
+      "amount": "2815.5"
+    }
+  },
+  {
+    "event_id": "f48076ed-fdac-42e2-b98c-be8a16d832af",
+    "timestamp": "2026-01-01T10:33:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "41195440-29fc-453b-8382-2e2e809fa128",
+    "payload": {
+      "amount": "3842.16"
+    }
+  },
+  {
+    "event_id": "82f23169-62e2-49f5-beed-aa036555d960",
+    "timestamp": "2026-01-01T10:36:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "b109ba0d-1d88-4b94-b0ca-e47341a75ec3",
+    "payload": {
+      "amount": "3102.4"
+    }
+  },
+  {
+    "event_id": "099683e4-4a39-4df2-9ff5-329d85ef056a",
+    "timestamp": "2026-01-01T10:39:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "f19a460a-18c7-4bc4-a1f2-5c2b2a7c2fd7",
+    "payload": {
+      "amount": "2446.7"
+    }
+  },
+  {
+    "event_id": "ce94ca3b-ddbf-497d-b776-bf2df1b379a1",
+    "timestamp": "2026-01-01T10:42:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "f3522b13-01f3-4d56-b731-2be89d7e278e",
+    "payload": {
+      "amount": "13804.29"
+    }
+  },
+  {
+    "event_id": "6fb6fd92-6b5e-48f6-b963-35dd04e09fa6",
+    "timestamp": "2026-01-01T10:45:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "48ae1ba5-2de6-4317-a6c5-9801e0d53c25",
+    "payload": {
+      "amount": "3483.1"
+    }
+  },
+  {
+    "event_id": "b8004dad-e904-475c-888a-5da8d015dd74",
+    "timestamp": "2026-01-01T10:48:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "97837daa-8ecd-4237-8243-dbd30176045f",
+    "payload": {
+      "amount": "4041.75"
+    }
+  },
+  {
+    "event_id": "dd5e70ef-ac1c-4f9c-9099-4bd5d4c57cc0",
+    "timestamp": "2026-01-01T10:51:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "cbeea01f-8a59-4567-9741-f8894130731a",
+    "payload": {
+      "amount": "12867.66"
+    }
+  },
+  {
+    "event_id": "2ed4b94e-6cd8-4239-a957-f06b4bf2e1f2",
+    "timestamp": "2026-01-01T10:54:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "f09a6d43-a84b-412c-99a6-a8ffb85158e1",
+    "payload": {
+      "amount": "1985.54"
+    }
+  },
+  {
+    "event_id": "246647d5-57ab-4781-9ddc-371a82baf0fa",
+    "timestamp": "2026-01-01T10:57:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "7090d47d-fa1a-41d7-8a34-c0608693dd08",
+    "payload": {
+      "amount": "15446.08"
+    }
+  },
+  {
+    "event_id": "10ea744f-c841-4e1c-8313-76ca8c80ce35",
+    "timestamp": "2026-01-01T11:00:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "f536a86d-a8b7-4900-b2dd-017b04053dd7",
+    "payload": {
+      "amount": "3377.0"
+    }
+  },
+  {
+    "event_id": "51d89362-ab25-4513-a5d3-d8cfe2ab9cef",
+    "timestamp": "2026-01-01T11:03:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "68d989c9-9610-4a6b-b23c-cc61f2fc35ba",
+    "payload": {
+      "amount": "3610.35"
+    }
+  },
+  {
+    "event_id": "f9abce4f-5d0f-4b43-8160-61c22c61f465",
+    "timestamp": "2026-01-01T11:06:00",
+    "event_type": "FundsDebited",
+    "transaction_id": "af0ea6a8-b7f4-4f49-97ea-598df9453aee",
+    "payload": {
+      "amount": "5944.0"
+    }
+  },
+  {
+    "event_id": "e18c011f-d31a-47c9-aeb1-f87b7d263c7d",
+    "timestamp": "2026-07-26T15:38:49.507186",
+    "event_type": "FundsCredited",
+    "transaction_id": "f6afae2d-e8ba-478e-833f-0bc1d8c235a9",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "51fb8ecc-5639-42fa-8ac5-f0e7b6fcdb86",
+    "timestamp": "2026-07-26T15:38:49.553389",
+    "event_type": "FundsCredited",
+    "transaction_id": "3df97290-b508-4bb2-bfcc-3b449b1f371d",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "38e70c54-8f74-4c38-8cbf-ab066f192990",
+    "timestamp": "2026-07-26T15:38:49.592016",
+    "event_type": "FundsCredited",
+    "transaction_id": "f5371577-5e40-4e77-a54c-c643474c135c",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "b05dda46-4d04-4518-8a8e-ad5b4acad855",
+    "timestamp": "2026-07-26T15:38:49.619606",
+    "event_type": "FundsCredited",
+    "transaction_id": "4f5f5743-dbd7-4978-aacf-c71255e44b2b",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "a2e11b4e-8460-4a99-979d-e77d86e10c87",
+    "timestamp": "2026-07-26T15:38:49.666671",
+    "event_type": "FundsCredited",
+    "transaction_id": "bc5c7bca-9951-4cfe-a89b-375f47c073b7",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "c4ba1463-9584-4978-a7b7-1a9f0677bcfb",
+    "timestamp": "2026-07-26T15:38:49.729974",
+    "event_type": "FundsCredited",
+    "transaction_id": "28b67520-51fe-45c0-bcc6-e5e5f479ad76",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "76717de2-c12d-42aa-b105-055b32693ba8",
+    "timestamp": "2026-07-26T15:38:49.797307",
+    "event_type": "FundsCredited",
+    "transaction_id": "b9e9afad-6304-43df-af48-654508e14736",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "dad1844d-96c8-4286-ac8f-26cacdf0f65f",
+    "timestamp": "2026-07-26T15:38:49.834682",
+    "event_type": "FundsCredited",
+    "transaction_id": "0d73f14c-656e-4063-9102-b1d1dc789854",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "3ceff54b-d335-41c3-8fe7-168c2a791d6a",
+    "timestamp": "2026-07-26T15:38:49.888495",
+    "event_type": "FundsCredited",
+    "transaction_id": "dfcd5460-e5f7-4c09-8652-3ac320f5745b",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "8ad1579b-26c3-4d43-be1b-c82863daff1d",
+    "timestamp": "2026-07-26T15:38:49.950292",
+    "event_type": "FundsCredited",
+    "transaction_id": "9102ae19-b85e-4366-b766-0ea093893d7d",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "0fff4fb1-fe2f-43d2-8007-26e6eacea63a",
+    "timestamp": "2026-07-26T15:38:50.004284",
+    "event_type": "FundsCredited",
+    "transaction_id": "88d1d811-c5ea-4155-8b56-6f0b17686645",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "80a96ec0-4b43-44a1-92b8-da440b33ce66",
+    "timestamp": "2026-07-26T15:38:50.054966",
+    "event_type": "FundsCredited",
+    "transaction_id": "afabfa59-b52f-4eac-b2b4-c339b1b1439b",
+    "payload": {
+      "amount": "10000.0"
+    }
+  },
+  {
+    "event_id": "9ed12617-630c-4d76-a68b-8f1b7c7911b1",
+    "timestamp": "2026-07-26T15:39:01.231592",
+    "event_type": "FundsCredited",
+    "transaction_id": "9cfdd781-8414-4520-923d-1d5145d2bc0f",
+    "payload": {
+      "amount": "1000000.0"
+    }
+  },
+  {
+    "event_id": "4bda83cb-f937-47ec-823c-707560367173",
+    "timestamp": "2026-07-26T15:39:26.318951",
+    "event_type": "FundsCredited",
+    "transaction_id": "71876bda-feaf-404f-857e-fb317f5d3aad",
+    "payload": {
+      "amount": "100000.0"
+    }
+  }
+]

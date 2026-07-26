@@ -21,10 +21,15 @@ class PortfolioSummary(BaseModel):
     total_asset_value: float
     total_value: float
     positions: Dict[str, float]
+    asset_values: Optional[Dict[str, float]] = None
+    avg_cost: Optional[Dict[str, float]] = None
     unrealized_pnl: Dict[str, float]
     allocations: Dict[str, float]
     health_signals: List[str]
     event_count: int
+
+    class Config:
+        extra = "allow"
 
 @router.get("/{wallet_id}/summary", response_model=PortfolioSummary)
 async def get_portfolio_summary(wallet_id: str):

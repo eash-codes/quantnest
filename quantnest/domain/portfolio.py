@@ -169,16 +169,25 @@ class Portfolio:
     ) -> List[str]:
         """Rule-based portfolio health warnings."""
         signals: List[str] = []
-        alloc = self.allocations()
+        try:
+            alloc = self.allocations()
+        except Exception:
+            return ["⚠️ Could not compute allocations (price data unavailable for some symbols)"]
 
         # Concentration risk
         for sym, pct in alloc.items():
-            if sym != "cash" and pct > max_asset_pct:
-                signals.append(f"⚠️ High concentration in {sym}: {pct:.1%}")
+            try:
+                if sym != "cash" and pct > max_asset_pct:
+                    signals.append(f"⚠️ High concentration in {sym}: {pct:.1%}")
+            except Exception:
+                continue  # skip symbols with NaN/invalid allocation
 
         # Liquidity risk
-        cash_pct = alloc.get("cash", Decimal("0.00"))
-        if cash_pct < min_cash_pct:
-            signals.append(f"⚠️ Low cash buffer: {cash_pct:.1%}")
+        try:
+            cash_pct = alloc.get("cash", Decimal("0.00"))
+            if cash_pct < min_cash_pct:
+                signals.append(f"⚠️ Low cash buffer: {cash_pct:.1%}")
+        except Exception:
+            pass
 
         return signals
