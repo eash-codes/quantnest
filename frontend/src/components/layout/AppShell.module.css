@@ -1,0 +1,89 @@
+.shell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  width: 100%;
+  overflow: hidden;
+  background: var(--surface-canvas);
+}
+
+.main {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  overflow: hidden;
+}
+
+/* Two-column workspace: order ticket on the left, dashboard on the right. */
+.split {
+  display: grid;
+  grid-template-columns: var(--sidepanel-width) minmax(0, 1fr);
+  width: 100%;
+  min-height: 0;
+}
+
+.sidePanel {
+  border-right: 1px solid var(--border-subtle);
+  background: var(--surface-canvas);
+  overflow-y: auto;
+  min-height: 0;
+}
+
+.content {
+  overflow-y: auto;
+  min-height: 0;
+  padding: var(--space-6);
+}
+
+.contentInner {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+  max-width: 1600px;
+  margin: 0 auto;
+  width: 100%;
+}
+
+/* Single-column pages (Notes, About). */
+.single {
+  width: 100%;
+  overflow-y: auto;
+  min-height: 0;
+  padding: var(--space-6);
+}
+
+.singleInner {
+  max-width: 1100px;
+  margin: 0 auto;
+  width: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-6);
+}
+
+@media (max-width: 1180px) {
+  .split {
+    grid-template-columns: 340px minmax(0, 1fr);
+  }
+}
+
+@media (max-width: 940px) {
+  .split {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .sidePanel {
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    overflow-y: visible;
+  }
+
+  .main {
+    overflow-y: auto;
+  }
+
+  .content {
+    overflow-y: visible;
+    padding: var(--space-4);
+  }
+}

@@ -1,0 +1,166 @@
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.label {
+  font-size: var(--text-xs);
+  font-weight: var(--weight-semibold);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+}
+
+.inputWrap {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.input {
+  width: 100%;
+  height: 38px;
+  padding: 0 var(--space-3);
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-base);
+  font-variant-numeric: tabular-nums;
+  transition:
+    border-color var(--duration-1) var(--ease),
+    box-shadow var(--duration-1) var(--ease),
+    background-color var(--duration-1) var(--ease);
+}
+
+.input::placeholder {
+  color: var(--text-tertiary);
+}
+
+.input:hover:not(:disabled):not(:focus) {
+  border-color: var(--border-strong);
+}
+
+.input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-surface);
+  background: var(--surface-raised);
+}
+
+.input:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.hasLeftIcon {
+  padding-left: 36px;
+}
+
+.hasRightSlot {
+  padding-right: 44px;
+}
+
+.leftIcon {
+  position: absolute;
+  left: var(--space-3);
+  display: flex;
+  align-items: center;
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.rightSlot {
+  position: absolute;
+  right: var(--space-2);
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+.suffix {
+  position: absolute;
+  right: var(--space-3);
+  font-size: var(--text-sm);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+/* ── Invalid ────────────────────────────────────────────────────────────── */
+.invalid .input,
+.input.invalid {
+  border-color: var(--loss);
+}
+
+.invalid .input:focus,
+.input.invalid:focus {
+  box-shadow: 0 0 0 3px var(--loss-surface);
+}
+
+.helper {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  line-height: var(--leading-snug);
+}
+
+.error {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  font-size: var(--text-xs);
+  color: var(--loss);
+  line-height: var(--leading-snug);
+}
+
+/* Hide number spinners — quantity is controlled by presets and typing. */
+.input[type='number']::-webkit-outer-spin-button,
+.input[type='number']::-webkit-inner-spin-button {
+  -webkit-appearance: none;
+  margin: 0;
+}
+
+.input[type='number'] {
+  -moz-appearance: textfield;
+  appearance: textfield;
+}
+
+/* ── Preset chips ───────────────────────────────────────────────────────── */
+.presets {
+  display: flex;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.preset {
+  height: 26px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-full);
+  border: 1px solid var(--border-default);
+  background: transparent;
+  color: var(--text-secondary);
+  font-size: var(--text-xs);
+  font-weight: var(--weight-medium);
+  font-variant-numeric: tabular-nums;
+  transition:
+    background-color var(--duration-1) var(--ease),
+    border-color var(--duration-1) var(--ease),
+    color var(--duration-1) var(--ease);
+}
+
+.preset:hover {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+
+.preset:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-surface);
+}
+
+.presetActive {
+  background: var(--accent-surface);
+  border-color: var(--accent-border);
+  color: var(--accent);
+}

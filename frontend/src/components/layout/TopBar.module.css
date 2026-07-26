@@ -1,0 +1,236 @@
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  height: var(--topbar-height);
+  padding: 0 var(--space-6);
+  background: var(--surface-raised);
+  border-bottom: 1px solid var(--border-subtle);
+  flex-shrink: 0;
+}
+
+/* ── Brand ──────────────────────────────────────────────────────────────── */
+.brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  flex-shrink: 0;
+}
+
+.brandMark {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: var(--radius-md);
+  background: var(--accent-surface);
+  color: var(--accent);
+}
+
+.brandName {
+  font-size: var(--text-md);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  letter-spacing: -0.02em;
+}
+
+/* ── Nav ────────────────────────────────────────────────────────────────── */
+.nav {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.navItem {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  transition:
+    background-color var(--duration-1) var(--ease),
+    color var(--duration-1) var(--ease);
+}
+
+.navItem:hover:not(.navItemActive) {
+  background: var(--surface-hover);
+  color: var(--text-primary);
+}
+
+.navItem:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-surface);
+}
+
+.navItemActive {
+  background: var(--accent-surface);
+  color: var(--accent);
+}
+
+/* ── Right cluster ──────────────────────────────────────────────────────── */
+.right {
+  margin-left: auto;
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  flex-shrink: 0;
+}
+
+.walletPicker {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.walletSelect {
+  appearance: none;
+  height: 32px;
+  padding: 0 var(--space-6) 0 var(--space-3);
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  color: var(--text-primary);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  cursor: pointer;
+  transition:
+    border-color var(--duration-1) var(--ease),
+    background-color var(--duration-1) var(--ease);
+}
+
+.walletSelect:hover {
+  border-color: var(--border-strong);
+  background: var(--surface-hover);
+}
+
+.walletSelect:focus-visible {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-surface);
+}
+
+.walletChevron {
+  position: absolute;
+  right: var(--space-2);
+  color: var(--text-tertiary);
+  pointer-events: none;
+}
+
+.divider {
+  width: 1px;
+  height: 22px;
+  background: var(--border-default);
+  flex-shrink: 0;
+}
+
+.balance {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  line-height: 1.2;
+}
+
+.balanceLabel {
+  font-size: var(--text-xs);
+  color: var(--text-tertiary);
+  text-transform: uppercase;
+  letter-spacing: var(--tracking-wide);
+  font-weight: var(--weight-semibold);
+}
+
+.balanceValue {
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Market clock ───────────────────────────────────────────────────────── */
+.clock {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  height: 32px;
+  padding: 0 var(--space-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-default);
+  background: var(--surface-overlay);
+  font-size: var(--text-sm);
+  cursor: default;
+}
+
+.clockDot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.dotOpen {
+  background: var(--profit);
+  box-shadow: 0 0 0 3px var(--profit-surface);
+}
+
+.dotWarning {
+  background: var(--warning);
+  box-shadow: 0 0 0 3px var(--warning-surface);
+}
+
+.dotClosed {
+  background: var(--text-tertiary);
+}
+
+.clockStatus {
+  font-weight: var(--weight-semibold);
+  color: var(--text-primary);
+}
+
+.clockTime {
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.clockSeparator {
+  color: var(--border-strong);
+}
+
+.clockCountdown {
+  color: var(--text-tertiary);
+  font-variant-numeric: tabular-nums;
+  font-size: var(--text-xs);
+}
+
+@media (max-width: 1180px) {
+  .clockCountdown,
+  .clockSeparator {
+    display: none;
+  }
+
+  .balance {
+    display: none;
+  }
+}
+
+@media (max-width: 860px) {
+  .topbar {
+    padding: 0 var(--space-4);
+    gap: var(--space-3);
+  }
+
+  .brandName {
+    display: none;
+  }
+
+  .navItem span {
+    display: none;
+  }
+
+  .navItem {
+    padding: 0 var(--space-2);
+  }
+}

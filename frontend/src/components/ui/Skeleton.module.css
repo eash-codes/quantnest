@@ -1,0 +1,36 @@
+.skeleton {
+  display: block;
+  background: linear-gradient(
+    90deg,
+    var(--surface-overlay) 0%,
+    var(--surface-hover) 50%,
+    var(--surface-overlay) 100%
+  );
+  background-size: 200% 100%;
+  animation: qn-shimmer 1.6s var(--ease) infinite;
+  border-radius: var(--radius-sm);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .skeleton {
+    animation: none;
+    background: var(--surface-overlay);
+  }
+}
+
+.text {
+  height: 0.85em;
+  border-radius: var(--radius-sm);
+}
+
+.rightAligned {
+  margin-left: auto;
+}
+
+.block {
+  border-radius: var(--radius-md);
+}
+
+.circle {
+  border-radius: 50%;
+}

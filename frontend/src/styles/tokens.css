@@ -1,0 +1,131 @@
+/* ==========================================================================
+   QuantNest Design Tokens
+   Single source of truth for colour, type, space, radius, elevation, motion.
+   Consumed by every *.module.css and by TradingChart via getComputedStyle.
+   ========================================================================== */
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap');
+
+:root {
+  /* ── Surfaces: elevation communicated by lightness, not by borders ────── */
+  --surface-canvas: #0e0f11;
+  --surface-raised: #141517;
+  --surface-overlay: #1a1c1f;
+  --surface-sunken: #0a0b0c;
+  --surface-hover: #212428;
+  --surface-active: #26292e;
+
+  /* ── Borders ──────────────────────────────────────────────────────────── */
+  --border-subtle: #212427;
+  --border-default: #2b2f34;
+  --border-strong: #3a3f45;
+
+  /* ── Text: exactly three levels ───────────────────────────────────────── */
+  --text-primary: #e8eaed;
+  --text-secondary: #9aa0a6;
+  --text-tertiary: #6b7178;
+  --text-inverse: #0e0f11;
+
+  /* ── Semantic: muted, reserved for P&L and status only ────────────────── */
+  --profit: #3fb950;
+  --profit-strong: #56d364;
+  --profit-surface: rgba(63, 185, 80, 0.10);
+  --profit-border: rgba(63, 185, 80, 0.28);
+
+  --loss: #f85149;
+  --loss-strong: #ff6b63;
+  --loss-surface: rgba(248, 81, 73, 0.10);
+  --loss-border: rgba(248, 81, 73, 0.28);
+
+  --warning: #d29922;
+  --warning-surface: rgba(210, 153, 34, 0.10);
+  --warning-border: rgba(210, 153, 34, 0.28);
+
+  /* ── One accent hue. Focus, active nav, primary CTA. Nothing else. ────── */
+  --accent: #4f7fff;
+  --accent-hover: #6b93ff;
+  --accent-surface: rgba(79, 127, 255, 0.12);
+  --accent-border: rgba(79, 127, 255, 0.35);
+
+  /* ── Typography ───────────────────────────────────────────────────────── */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto,
+    'Helvetica Neue', Arial, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas,
+    monospace;
+
+  --text-xs: 0.6875rem;   /* 11px  — overline labels */
+  --text-sm: 0.78125rem;  /* 12.5px — table cells */
+  --text-base: 0.875rem;  /* 14px  — body */
+  --text-md: 1rem;        /* 16px  — card values */
+  --text-lg: 1.25rem;     /* 20px  — KPI values */
+  --text-xl: 1.875rem;    /* 30px  — quote hero */
+
+  --leading-tight: 1.15;
+  --leading-snug: 1.35;
+  --leading-normal: 1.55;
+
+  --weight-regular: 400;
+  --weight-medium: 500;
+  --weight-semibold: 600;
+  --weight-bold: 700;
+
+  --tracking-wide: 0.06em;
+
+  /* ── Spacing: 4px grid ────────────────────────────────────────────────── */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-12: 48px;
+
+  /* ── Radius ───────────────────────────────────────────────────────────── */
+  --radius-sm: 6px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-full: 999px;
+
+  /* ── Elevation ────────────────────────────────────────────────────────── */
+  --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.30);
+  --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-lg: 0 12px 32px rgba(0, 0, 0, 0.45);
+
+  /* ── Motion ───────────────────────────────────────────────────────────── */
+  --ease: cubic-bezier(0.22, 0.61, 0.36, 1);
+  --duration-1: 120ms;
+  --duration-2: 180ms;
+  --duration-3: 240ms;
+
+  /* ── Layout ───────────────────────────────────────────────────────────── */
+  --topbar-height: 56px;
+  --sidepanel-width: 380px;
+  --z-dropdown: 100;
+  --z-sticky: 200;
+  --z-overlay: 900;
+  --z-toast: 1000;
+}
+
+/* Chart tokens are read by TradingChart.jsx at runtime so the canvas
+   inherits the theme instead of hardcoding its own palette. */
+:root {
+  --chart-bg: var(--surface-raised);
+  --chart-text: #9aa0a6;
+  --chart-grid: #1f2226;
+  --chart-border: #2b2f34;
+  --chart-up: #3fb950;
+  --chart-down: #f85149;
+  --chart-up-fill: rgba(63, 185, 80, 0.28);
+  --chart-down-fill: rgba(248, 81, 73, 0.28);
+  --chart-crosshair: #4f7fff;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --duration-1: 0ms;
+    --duration-2: 0ms;
+    --duration-3: 0ms;
+  }
+}

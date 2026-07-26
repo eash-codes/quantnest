@@ -1,0 +1,96 @@
+.tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding: 3px;
+  background: var(--surface-overlay);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.fullWidth {
+  display: flex;
+  width: 100%;
+}
+
+.fullWidth .tab {
+  flex: 1;
+}
+
+.tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  height: 30px;
+  padding: 0 var(--space-4);
+  border-radius: var(--radius-sm);
+  font-size: var(--text-sm);
+  font-weight: var(--weight-medium);
+  color: var(--text-secondary);
+  white-space: nowrap;
+  transition:
+    background-color var(--duration-2) var(--ease),
+    color var(--duration-2) var(--ease);
+}
+
+.tab:hover:not(.active) {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.tab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-surface);
+}
+
+.active {
+  background: var(--surface-raised);
+  color: var(--text-primary);
+  box-shadow: var(--shadow-sm);
+}
+
+/* ── Buy / sell toggle ──────────────────────────────────────────────────── */
+.sideToggle {
+  display: flex;
+  width: 100%;
+  padding: 3px;
+  gap: 3px;
+  background: var(--surface-sunken);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+}
+
+.sideTab {
+  flex: 1;
+  height: 34px;
+  border-radius: var(--radius-sm);
+  font-size: var(--text-base);
+  font-weight: var(--weight-semibold);
+  color: var(--text-secondary);
+  letter-spacing: 0.01em;
+  transition:
+    background-color var(--duration-2) var(--ease),
+    color var(--duration-2) var(--ease);
+}
+
+.sideTab:hover:not(.buyActive):not(.sellActive) {
+  color: var(--text-primary);
+  background: var(--surface-hover);
+}
+
+.sideTab:focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 2px var(--accent-surface);
+}
+
+.buyActive {
+  background: var(--profit);
+  color: #06210c;
+}
+
+.sellActive {
+  background: var(--loss);
+  color: #2a0705;
+}
