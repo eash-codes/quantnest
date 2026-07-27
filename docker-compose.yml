@@ -1,0 +1,78 @@
+# QuantNest — full stack.
+#
+#   cp .env.example .env      # then set JWT_SECRET_KEY
+#   docker compose up --build
+#
+#   Frontend  http://localhost:5173
+#   API docs  http://localhost:8000/docs
+#
+# Postgres is behind an optional profile:
+#   docker compose --profile postgres up --build
+
+services:
+  api:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8000:8000"
+    environment:
+      # Fails fast if unset, rather than signing tokens with a guessable key.
+      # Generate one with: openssl rand -hex 32
+      JWT_SECRET_KEY: "${JWT_SECRET_KEY:?JWT_SECRET_KEY must be set in .env}"
+      DATABASE_URL: ${DATABASE_URL:-sqlite:////data/quantnest.db}
+      QUANTNEST_MARKET_PROVIDER: ${QUANTNEST_MARKET_PROVIDER:-yfinance}
+      LOG_FORMAT: ${LOG_FORMAT:-json}
+      LOG_LEVEL: ${LOG_LEVEL:-INFO}
+      CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173}
+      ACCESS_TOKEN_TTL_MINUTES: ${ACCESS_TOKEN_TTL_MINUTES:-30}
+      REFRESH_TOKEN_TTL_DAYS: ${REFRESH_TOKEN_TTL_DAYS:-7}
+      ENVIRONMENT: production
+    volumes:
+      - quantnest-data:/data
+    healthcheck:
+      test: ["CMD", "curl", "--fail", "--silent", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  web:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        # Baked into the bundle at build time, so it must be the URL the
+        # browser will use — not the internal service name.
+        VITE_API_URL: ${VITE_API_URL:-http://localhost:8000}
+    ports:
+      - "5173:80"
+    depends_on:
+      api:
+        condition: service_healthy
+    restart: unless-stopped
+
+  # Optional: `docker compose --profile postgres up`
+  # Then set DATABASE_URL=postgresql+psycopg://quantnest:quantnest@db:5432/quantnest
+  db:
+    image: postgres:16-alpine
+    profiles: ["postgres"]
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-quantnest}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-quantnest}
+      POSTGRES_DB: ${POSTGRES_DB:-quantnest}
+    ports:
+      - "5432:5432"
+    volumes:
+      - quantnest-postgres:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-quantnest}"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    restart: unless-stopped
+
+volumes:
+  quantnest-data:
+  quantnest-postgres:

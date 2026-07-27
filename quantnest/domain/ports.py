@@ -20,6 +20,7 @@ if TYPE_CHECKING:  # pragma: no cover - typing only
     from .events import DomainEvent
     from .order import Order
     from .trade import Trade
+    from .user import User, Wallet as WalletOwnership
 
 __all__ = [
     "UnknownSymbolError",
@@ -28,10 +29,16 @@ __all__ = [
     "PositionRepository",
     "TradeRepository",
     "OrderRepository",
+    "UserRepository",
+    "WalletOwnershipRepository",
+    "PasswordHasher",
+    "TokenService",
     "InMemoryEventStore",
     "InMemoryPositionRepository",
     "InMemoryTradeRepository",
     "InMemoryOrderRepository",
+    "InMemoryUserRepository",
+    "InMemoryWalletOwnershipRepository",
     "StaticMarketDataProvider",
 ]
 
@@ -103,6 +110,113 @@ class OrderRepository(Protocol):
     def get_order(self, wallet_id: str, order_id: str) -> Optional["Order"]:
         """Return a single order, or ``None`` when it does not exist."""
         ...
+
+
+@runtime_checkable
+class UserRepository(Protocol):
+    """Persists user accounts."""
+
+    def get_by_email(self, email: str) -> Optional["User"]:
+        """Return the user with this email, or ``None``."""
+        ...
+
+    def get_by_id(self, user_id: str) -> Optional["User"]:
+        """Return the user with this id, or ``None``."""
+        ...
+
+    def add(self, user: "User") -> None:
+        """Persist a new user. Raises if the email is already taken."""
+        ...
+
+
+@runtime_checkable
+class WalletOwnershipRepository(Protocol):
+    """Records which user owns which wallet."""
+
+    def get(self, wallet_id: str) -> Optional["WalletOwnership"]:
+        """Return the ownership record for a wallet, or ``None``."""
+        ...
+
+    def list_for_owner(self, owner_id: str) -> List["WalletOwnership"]:
+        """Return every wallet belonging to a user."""
+        ...
+
+    def add(self, wallet: "WalletOwnership") -> None:
+        """Record a new wallet ownership edge."""
+        ...
+
+
+@runtime_checkable
+class PasswordHasher(Protocol):
+    """Hashes and verifies passwords.
+
+    A port so the domain never imports bcrypt, and tests can substitute a
+    fast fake instead of paying the deliberate KDF cost.
+    """
+
+    def hash(self, password: str) -> str:
+        ...
+
+    def verify(self, password: str, password_hash: str) -> bool:
+        ...
+
+
+@runtime_checkable
+class TokenService(Protocol):
+    """Issues and verifies bearer tokens."""
+
+    def issue_access_token(self, user_id: str) -> str:
+        ...
+
+    def issue_refresh_token(self, user_id: str) -> str:
+        ...
+
+    def verify_access_token(self, token: str) -> str:
+        """Return the subject (user id). Raises ``AuthenticationError``."""
+        ...
+
+    def verify_refresh_token(self, token: str) -> str:
+        """Return the subject (user id). Raises ``AuthenticationError``."""
+        ...
+
+
+class InMemoryUserRepository:
+    """Ephemeral :class:`UserRepository`."""
+
+    def __init__(self) -> None:
+        self._by_id: Dict[str, "User"] = {}
+        self._by_email: Dict[str, str] = {}
+
+    def get_by_email(self, email: str) -> Optional["User"]:
+        user_id = self._by_email.get(email.strip().lower())
+        return self._by_id.get(user_id) if user_id else None
+
+    def get_by_id(self, user_id: str) -> Optional["User"]:
+        return self._by_id.get(user_id)
+
+    def add(self, user: "User") -> None:
+        from .exceptions import EmailAlreadyRegisteredError
+
+        if user.email in self._by_email:
+            raise EmailAlreadyRegisteredError("That email is already registered")
+        self._by_id[user.user_id] = user
+        self._by_email[user.email] = user.user_id
+
+
+class InMemoryWalletOwnershipRepository:
+    """Ephemeral :class:`WalletOwnershipRepository`."""
+
+    def __init__(self) -> None:
+        self._wallets: Dict[str, "WalletOwnership"] = {}
+
+    def get(self, wallet_id: str) -> Optional["WalletOwnership"]:
+        return self._wallets.get(wallet_id)
+
+    def list_for_owner(self, owner_id: str) -> List["WalletOwnership"]:
+        return [w for w in self._wallets.values() if w.owner_id == owner_id]
+
+    def add(self, wallet: "WalletOwnership") -> None:
+        self._wallets[wallet.wallet_id] = wallet
 
 
 class InMemoryEventStore:

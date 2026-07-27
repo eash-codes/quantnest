@@ -7,6 +7,7 @@
  */
 
 import { logApiCall, updateApiCall } from './devBus';
+import { useAuthStore, getAccessToken, getRefreshToken } from '../stores/useAuthStore';
 
 export const API_BASE_URL = (import.meta.env?.VITE_API_URL ?? 'http://localhost:8000').replace(/\/$/, '');
 
@@ -269,4 +270,93 @@ export async function apiFetch(path, options = {}) {
 export const api = {
   get: (path, options) => apiFetch(path, { ...options, method: 'GET' }),
   post: (path, body, options) => apiFetch(path, { ...options, method: 'POST', body }),
+};
+
+
+// ── Authenticated requests ───────────────────────────────────────────────
+
+/** Endpoints that must never carry a token or trigger a refresh loop. */
+const PUBLIC_PATHS = ['/auth/login', '/auth/register', '/auth/refresh', '/health', '/'];
+
+function isPublic(path) {
+  return PUBLIC_PATHS.some((p) => path === p || path.startsWith(`${p}?`));
+}
+
+let refreshInFlight = null;
+
+/**
+ * Exchange the refresh token for a new pair.
+ *
+ * Concurrent 401s share one in-flight refresh, so a page issuing several
+ * requests at once does not fire several refreshes and race.
+ */
+async function refreshSession() {
+  if (refreshInFlight) return refreshInFlight;
+
+  const refreshToken = getRefreshToken();
+  if (!refreshToken) return null;
+
+  refreshInFlight = (async () => {
+    try {
+      const session = await apiFetch('/auth/refresh', {
+        method: 'POST',
+        body: { refresh_token: refreshToken },
+      });
+      useAuthStore.getState().setSession(session);
+      return session.access_token;
+    } catch {
+      // Refresh token is expired or revoked: force a clean sign-out.
+      useAuthStore.getState().clearSession();
+      return null;
+    } finally {
+      refreshInFlight = null;
+    }
+  })();
+
+  return refreshInFlight;
+}
+
+/**
+ * Like `apiFetch`, but attaches the bearer token and transparently retries
+ * once after refreshing an expired access token.
+ */
+export async function authFetch(path, options = {}) {
+  const normalisedPath = path.startsWith('/') ? path : `/${path}`;
+
+  if (isPublic(normalisedPath)) {
+    return apiFetch(normalisedPath, options);
+  }
+
+  const token = getAccessToken();
+  const withAuth = {
+    ...options,
+    headers: {
+      ...(options.headers ?? {}),
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+  };
+
+  try {
+    return await apiFetch(normalisedPath, withAuth);
+  } catch (error) {
+    // Only an expired/invalid access token is worth retrying.
+    if (!(error instanceof ApiError) || error.status !== 401) throw error;
+
+    const freshToken = await refreshSession();
+    if (!freshToken) throw error;
+
+    return apiFetch(normalisedPath, {
+      ...options,
+      headers: {
+        ...(options.headers ?? {}),
+        Authorization: `Bearer ${freshToken}`,
+      },
+    });
+  }
+}
+
+/** Authenticated convenience wrapper, mirroring `api`. */
+export const authApi = {
+  get: (path, options) => authFetch(path, { ...options, method: 'GET' }),
+  post: (path, body, options) => authFetch(path, { ...options, method: 'POST', body }),
 };

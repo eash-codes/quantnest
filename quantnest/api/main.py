@@ -15,6 +15,7 @@ from quantnest.api.errors import register_exception_handlers
 from quantnest.infra.db.session import init_db
 from quantnest.infra.logging import configure_logging, request_id_var
 
+from .auth import router as auth_router
 from .history import router as history_router
 from .market import router as market_router
 from .orders import router as orders_router
@@ -99,6 +100,7 @@ def create_app() -> FastAPI:
 
     register_exception_handlers(app)
 
+    app.include_router(auth_router)
     app.include_router(portfolio_router)
     app.include_router(history_router)
     app.include_router(orders_router)

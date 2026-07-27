@@ -16,10 +16,19 @@ from sqlalchemy import delete, select
 from sqlalchemy.orm import Session
 
 from quantnest.domain.events import DomainEvent, FundsCredited, FundsDebited
+from quantnest.domain.exceptions import EmailAlreadyRegisteredError
 from quantnest.domain.order import Order
 from quantnest.domain.trade import Trade
+from quantnest.domain.user import User, Wallet as WalletOwnership
 
-from .models import OrderRow, PositionRow, TradeRow, WalletEventRow
+from .models import (
+    OrderRow,
+    PositionRow,
+    TradeRow,
+    UserRow,
+    WalletEventRow,
+    WalletOwnershipRow,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -233,4 +242,92 @@ class SqlOrderRepository:
             ),
             rejection_reason=row.rejection_reason,
             transaction_id=row.transaction_id,
+        )
+
+
+class SqlUserRepository:
+    """:class:`~quantnest.domain.ports.UserRepository` backed by ``users``."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get_by_email(self, email: str) -> Optional[User]:
+        row = self._session.scalar(
+            select(UserRow).where(UserRow.email == email.strip().lower())
+        )
+        return self._to_domain(row) if row else None
+
+    def get_by_id(self, user_id: str) -> Optional[User]:
+        row = self._session.scalar(select(UserRow).where(UserRow.user_id == user_id))
+        return self._to_domain(row) if row else None
+
+    def add(self, user: User) -> None:
+        existing = self._session.scalar(
+            select(UserRow.id).where(UserRow.email == user.email)
+        )
+        if existing is not None:
+            raise EmailAlreadyRegisteredError("That email is already registered")
+
+        self._session.add(
+            UserRow(
+                user_id=user.user_id,
+                email=user.email,
+                password_hash=user.password_hash,
+                display_name=user.display_name,
+                is_active=user.is_active,
+                created_at=user.created_at,
+            )
+        )
+        self._session.flush()
+
+    @staticmethod
+    def _to_domain(row: UserRow) -> User:
+        return User(
+            user_id=row.user_id,
+            email=row.email,
+            password_hash=row.password_hash,
+            display_name=row.display_name,
+            is_active=row.is_active,
+            created_at=row.created_at,
+        )
+
+
+class SqlWalletOwnershipRepository:
+    """:class:`~quantnest.domain.ports.WalletOwnershipRepository`."""
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def get(self, wallet_id: str) -> Optional[WalletOwnership]:
+        row = self._session.scalar(
+            select(WalletOwnershipRow).where(WalletOwnershipRow.wallet_id == wallet_id)
+        )
+        return self._to_domain(row) if row else None
+
+    def list_for_owner(self, owner_id: str) -> List[WalletOwnership]:
+        rows = self._session.scalars(
+            select(WalletOwnershipRow)
+            .where(WalletOwnershipRow.owner_id == owner_id)
+            .order_by(WalletOwnershipRow.created_at, WalletOwnershipRow.id)
+        ).all()
+        return [self._to_domain(row) for row in rows]
+
+    def add(self, wallet: WalletOwnership) -> None:
+        self._session.add(
+            WalletOwnershipRow(
+                wallet_id=wallet.wallet_id,
+                owner_id=wallet.owner_id,
+                label=wallet.label,
+                created_at=wallet.created_at,
+            )
+        )
+        self._session.flush()
+
+    @staticmethod
+    def _to_domain(row: WalletOwnershipRow) -> WalletOwnership:
+        return WalletOwnership(
+            wallet_id=row.wallet_id,
+            owner_id=row.owner_id,
+            label=row.label,
+            created_at=row.created_at,
         )

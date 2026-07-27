@@ -11,8 +11,14 @@ dependencies = [
     "fastapi>=0.110",
     "uvicorn[standard]>=0.27",
     "pydantic>=2.6",
+    "pydantic[email]>=2.6",
     "sqlalchemy>=2.0",
     "yfinance>=0.2",
+    # Authentication
+    "pyjwt>=2.8",
+    "passlib[bcrypt]>=1.7.4",
+    # passlib 1.7.4 reads bcrypt.__about__, which bcrypt 4.1 removed.
+    "bcrypt<4.1",
 ]
 
 [project.optional-dependencies]

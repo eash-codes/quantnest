@@ -1,8 +1,18 @@
-import { CandlestickChart, ChevronDown, Wallet, LineChart, StickyNote, Info, Terminal } from 'lucide-react';
+import {
+  CandlestickChart,
+  ChevronDown,
+  Wallet,
+  LineChart,
+  StickyNote,
+  Info,
+  Terminal,
+  LogOut,
+} from 'lucide-react';
 import Button from '../ui/Button';
 import MarketClock from './MarketClock';
 import { inr } from '../../lib/format';
 import { useSessionStore } from '../../stores/useSessionStore';
+import { useAuth, useLogout } from '../../hooks/useAuth';
 import styles from './TopBar.module.css';
 
 const NAV_ITEMS = [
@@ -17,6 +27,9 @@ export default function TopBar({ page, onNavigate, wallets = [], cash = null }) 
   const setWalletId = useSessionStore((s) => s.setWalletId);
   const devConsoleEnabled = useSessionStore((s) => s.devConsoleEnabled);
   const toggleDevConsole = useSessionStore((s) => s.toggleDevConsole);
+
+  const { user } = useAuth();
+  const logout = useLogout();
 
   const showWalletPicker = page === 'portfolio' || page === 'wallet';
 
@@ -89,6 +102,17 @@ export default function TopBar({ page, onNavigate, wallets = [], cash = null }) 
           title={devConsoleEnabled ? 'Hide developer inspector' : 'Show developer inspector'}
         >
           <Terminal size={15} strokeWidth={2} />
+        </Button>
+
+        <Button
+          variant="ghost"
+          size="sm"
+          iconOnly
+          onClick={logout}
+          title={user?.email ? `Sign out (${user.email})` : 'Sign out'}
+          aria-label="Sign out"
+        >
+          <LogOut size={15} strokeWidth={2} />
         </Button>
       </div>
     </header>

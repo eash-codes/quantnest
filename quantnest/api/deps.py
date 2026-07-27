@@ -12,10 +12,14 @@ import uuid
 from typing import Annotated, Iterator, Optional
 
 from fastapi import Depends, Header, HTTPException, Path, status
+from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
+from quantnest.application.auth_service import AuthService
 from quantnest.application.history_service import HistoryService
 from quantnest.application.portfolio_service import PortfolioService
+from quantnest.domain.exceptions import AuthenticationError
+from quantnest.domain.user import User
 from quantnest.domain.order_engine import OrderExecutionEngine
 from quantnest.domain.ports import MarketDataProvider
 from quantnest.infra.db.repositories import (
@@ -23,9 +27,12 @@ from quantnest.infra.db.repositories import (
     SqlOrderRepository,
     SqlPositionRepository,
     SqlTradeRepository,
+    SqlUserRepository,
+    SqlWalletOwnershipRepository,
 )
 from quantnest.infra.db.session import get_session_factory
 from quantnest.infra.market import get_market_provider
+from quantnest.infra.security import get_password_hasher, get_token_service
 
 
 def get_db_session() -> Iterator[Session]:
@@ -157,7 +164,51 @@ def get_transaction_id(
 TransactionIdDep = Annotated[str, Depends(get_transaction_id)]
 
 
-def validated_wallet_id(
+# ── Authentication ───────────────────────────────────────────────────────
+
+#: auto_error=False so a missing header raises our AuthenticationError
+#: (RFC 9457 problem+json) rather than Starlette's bare 403.
+_bearer_scheme = HTTPBearer(auto_error=False, description="JWT access token")
+
+
+def get_auth_service(session: SessionDep) -> AuthService:
+    return AuthService(
+        users=SqlUserRepository(session),
+        wallets=SqlWalletOwnershipRepository(session),
+        hasher=get_password_hasher(),
+        tokens=get_token_service(),
+    )
+
+
+AuthServiceDep = Annotated[AuthService, Depends(get_auth_service)]
+
+
+def get_current_user(
+    auth: AuthServiceDep,
+    credentials: Annotated[
+        Optional[HTTPAuthorizationCredentials], Depends(_bearer_scheme)
+    ] = None,
+) -> User:
+    """Resolve the bearer token to the signed-in user.
+
+    Raises ``AuthenticationError`` (HTTP 401) when the token is absent,
+    malformed, expired, or of the wrong type.
+    """
+    if credentials is None or not credentials.credentials:
+        raise AuthenticationError("Sign in to access this resource")
+
+    return auth.user_from_access_token(credentials.credentials)
+
+
+CurrentUserDep = Annotated[User, Depends(get_current_user)]
+
+
+# ── Authorisation ────────────────────────────────────────────────────────
+
+
+def authorized_wallet_id(
+    auth: AuthServiceDep,
+    current_user: CurrentUserDep,
     wallet_id: str = Path(
         min_length=1,
         max_length=64,
@@ -165,7 +216,13 @@ def validated_wallet_id(
         description="Wallet identifier",
     ),
 ) -> str:
-    return wallet_id
+    """Validate the wallet id *and* confirm the caller owns it.
+
+    Every wallet-scoped route depends on this, so ownership is enforced in
+    one place rather than repeated per handler. Previously any caller could
+    read or trade any wallet by editing the URL.
+    """
+    return auth.authorize_wallet(current_user, wallet_id)
 
 
-WalletIdDep = Annotated[str, Depends(validated_wallet_id)]
+WalletIdDep = Annotated[str, Depends(authorized_wallet_id)]

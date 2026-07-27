@@ -3,6 +3,7 @@ import { render, screen, waitFor, fireEvent, cleanup } from '@testing-library/re
 import App from './App';
 import { createQueryClient } from './lib/queryClient';
 import { useSessionStore } from './stores/useSessionStore';
+import { useAuthStore } from './stores/useAuthStore';
 
 /** Each test gets a fresh cache so results cannot leak between cases. */
 function renderApp() {
@@ -81,6 +82,19 @@ beforeEach(() => {
     vi.stubGlobal('crypto', { randomUUID: () => 'test-uuid' });
   }
   localStorage.clear();
+
+  // The app is gated behind auth, so tests start already signed in.
+  useAuthStore.setState({
+    accessToken: 'test-access-token',
+    refreshToken: 'test-refresh-token',
+    user: {
+      user_id: 'u-test',
+      email: 'test@example.com',
+      display_name: 'Test',
+      wallets: ['demo-user'],
+    },
+  });
+
   useSessionStore.setState({
     walletId: 'demo-user',
     selectedSymbol: null,

@@ -1,6 +1,6 @@
 import { useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/apiClient';
+import { authApi as api } from '../lib/apiClient';
 import { queryKeys } from '../lib/queryClient';
 import { buildHoldings, computeTotals } from '../lib/portfolioMath';
 import { useQuoteRefetchInterval } from './useMarketHours';

@@ -55,3 +55,36 @@ class OrderStateError(DomainError):
     """The order is in a state that forbids the requested transition."""
 
     code = "invalid_order_state"
+
+
+# ── Authentication and authorisation ─────────────────────────────────────
+
+
+class AuthenticationError(DomainError):
+    """Credentials are missing, malformed or incorrect. Maps to HTTP 401."""
+
+    code = "authentication_failed"
+
+
+class AuthorizationError(DomainError):
+    """The caller is authenticated but not permitted. Maps to HTTP 403."""
+
+    code = "not_authorized"
+
+
+class EmailAlreadyRegisteredError(DomainError):
+    """Registration attempted with an email that already exists. HTTP 409."""
+
+    code = "email_already_registered"
+
+
+class UserNotFoundError(DomainError):
+    """No user exists for the given identifier. HTTP 404."""
+
+    code = "user_not_found"
+
+
+class WalletAlreadyExistsError(DomainError):
+    """A wallet with that id is already taken. HTTP 409."""
+
+    code = "wallet_already_exists"

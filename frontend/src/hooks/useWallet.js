@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { api } from '../lib/apiClient';
+import { authApi as api } from '../lib/apiClient';
 import { queryKeys } from '../lib/queryClient';
 
 export function useWalletEvents(walletId, limit = 50) {

@@ -25,7 +25,7 @@ def client():
         "sqlite://",
         connect_args={"check_same_thread": False},
         poolclass=StaticPool,
-        future=True,
+        future=True
     )
     Base.metadata.create_all(engine)
     factory = sessionmaker(bind=engine, autoflush=False, expire_on_commit=False, future=True)
@@ -55,11 +55,28 @@ def client():
 
     with TestClient(app) as test_client:
         test_client.market = market
+
+        # Every wallet-scoped route requires a signed-in owner, so the
+        # fixture registers one account and exposes its auth header.
+        session = test_client.post(
+            "/auth/register",
+            json={"email": "api-test@example.com", "password": "s3cret-passphrase"}
+        ).json()
+        # Setting the header on the client itself means every subsequent
+        # request is authenticated without threading it through each call.
+        test_client.headers["Authorization"] = f"Bearer {session['access_token']}"
+
         yield test_client
 
     app.dependency_overrides.clear()
     Base.metadata.drop_all(engine)
     engine.dispose()
+
+
+def own(client, wallet_id):
+    """Claim a wallet for the fixture's signed-in user, then return its id."""
+    client.post("/auth/wallets", json={"wallet_id": wallet_id})
+    return wallet_id
 
 
 # ── Meta ─────────────────────────────────────────────────────────────────
@@ -81,7 +98,7 @@ def test_every_response_carries_a_request_id(client):
 
 def test_full_trading_loop(client):
     """Credit -> quote -> buy -> verify portfolio -> sell -> verify again."""
-    wallet = "loop-user"
+    wallet = own(client, "loop-user")
 
     credit = client.post(f"/portfolio/{wallet}/credit", json={"amount": 100000})
     assert credit.status_code == 200
@@ -113,7 +130,7 @@ def test_full_trading_loop(client):
 
 
 def test_trade_appears_in_history(client):
-    wallet = "history-user"
+    wallet = own(client, "history-user")
     client.post(f"/portfolio/{wallet}/credit", json={"amount": 50000})
     client.post(f"/portfolio/{wallet}/buy", json={"symbol": "INFY", "quantity": 2})
 
@@ -151,7 +168,7 @@ def test_batch_quotes_report_unknown_symbols_inline(client):
 
 
 def test_buy_without_funds_returns_a_rejection(client):
-    wallet = "poor-user"
+    wallet = own(client, "poor-user")
     client.post(f"/portfolio/{wallet}/credit", json={"amount": 1000})
 
     response = client.post(f"/portfolio/{wallet}/buy", json={"symbol": "RELIANCE", "quantity": 10})
@@ -164,7 +181,7 @@ def test_buy_without_funds_returns_a_rejection(client):
 
 
 def test_overdrawing_the_wallet_returns_409(client):
-    wallet = "overdraw"
+    wallet = own(client, "overdraw")
     client.post(f"/portfolio/{wallet}/credit", json={"amount": 100})
 
     response = client.post(f"/portfolio/{wallet}/debit", json={"amount": 500})
@@ -196,10 +213,13 @@ def test_unknown_symbol_quote_returns_404(client):
         {"symbol": "INFY"},
         {"quantity": 1},
         {"symbol": "INFY", "quantity": 1, "unexpected": "field"},
-    ],
+    ]
 )
 def test_invalid_trade_payloads_are_rejected(client, payload):
-    response = client.post("/portfolio/val-user/buy", json=payload)
+    wallet = own(client, "val-user")
+    response = client.post(
+        f"/portfolio/{wallet}/buy", json=payload
+    )
 
     assert response.status_code == 422
     assert response.json()["type"] == "validation_error"
@@ -207,12 +227,13 @@ def test_invalid_trade_payloads_are_rejected(client, payload):
 
 @pytest.mark.parametrize("amount", [0, -100])
 def test_non_positive_amounts_are_rejected(client, amount):
-    response = client.post("/portfolio/val-user/credit", json={"amount": amount})
+    wallet = own(client, "val-amount-user")
+    response = client.post(f"/portfolio/{wallet}/credit", json={"amount": amount})
     assert response.status_code == 422
 
 
 def test_symbols_are_normalised_to_uppercase(client):
-    wallet = "case-user"
+    wallet = own(client, "case-user")
     client.post(f"/portfolio/{wallet}/credit", json={"amount": 50000})
 
     response = client.post(f"/portfolio/{wallet}/buy", json={"symbol": "infy", "quantity": 1})
@@ -225,7 +246,7 @@ def test_symbols_are_normalised_to_uppercase(client):
 
 
 def test_credit_is_idempotent_across_requests(client):
-    wallet = "idem-user"
+    wallet = own(client, "idem-user")
     headers = {"X-Transaction-ID": "fixed-tx-001"}
 
     first = client.post(f"/portfolio/{wallet}/credit", json={"amount": 5000}, headers=headers)
@@ -241,10 +262,14 @@ def test_credit_is_idempotent_across_requests(client):
 
 def test_errors_never_leak_internals(client):
     """Error bodies must be problem+json and free of tracebacks."""
-    response = client.get("/portfolio/unknown-wallet/summary")
-    assert response.status_code == 200  # an unknown wallet is simply empty
+    # An unowned wallet is refused rather than silently returning empty data.
+    response = client.get(
+        "/portfolio/unknown-wallet/summary"
+    )
+    assert response.status_code == 403
 
-    bad = client.post("/portfolio/x/credit", json={"amount": "not-a-number"})
+    wallet = own(client, "contract-user")
+    bad = client.post(f"/portfolio/{wallet}/credit", json={"amount": "not-a-number"})
     assert bad.status_code == 422
 
     body = bad.json()
@@ -265,12 +290,12 @@ def test_unknown_route_returns_problem_json(client):
 
 
 def test_place_order_via_orders_endpoint(client):
-    wallet = "oms-user"
+    wallet = own(client, "oms-user")
     client.post(f"/portfolio/{wallet}/credit", json={"amount": 100000})
 
     response = client.post(
         "/orders",
-        json={"wallet_id": wallet, "symbol": "TCS", "side": "BUY", "quantity": 2},
+        json={"wallet_id": wallet, "symbol": "TCS", "side": "BUY", "quantity": 2}
     )
 
     assert response.status_code == 201
@@ -284,7 +309,8 @@ def test_place_order_via_orders_endpoint(client):
 
 
 def test_fetching_a_missing_order_returns_404(client):
-    response = client.get("/orders/oms-user/no-such-order")
+    wallet = own(client, "missing-order-user")
+    response = client.get(f"/orders/{wallet}/no-such-order")
 
     assert response.status_code == 404
     assert response.json()["type"] == "order_not_found"

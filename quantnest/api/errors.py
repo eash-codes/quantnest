@@ -16,14 +16,19 @@ from fastapi.responses import JSONResponse
 from starlette.exceptions import HTTPException as StarletteHTTPException
 
 from quantnest.domain.exceptions import (
+    AuthenticationError,
+    AuthorizationError,
     DomainError,
+    EmailAlreadyRegisteredError,
     InsufficientFundsError,
     InsufficientPositionsError,
     OrderExecutionError,
     OrderNotFoundError,
     OrderStateError,
     UnknownSymbolError,
+    UserNotFoundError,
     ValidationError as DomainValidationError,
+    WalletAlreadyExistsError,
 )
 from quantnest.infra.logging import request_id_var
 
@@ -34,6 +39,11 @@ PROBLEM_JSON = "application/problem+json"
 #: Domain exception -> (HTTP status, human-readable title)
 _DOMAIN_STATUS_MAP: dict[type[DomainError], tuple[int, str]] = {
     DomainValidationError: (status.HTTP_400_BAD_REQUEST, "Invalid request"),
+    AuthenticationError: (status.HTTP_401_UNAUTHORIZED, "Not authenticated"),
+    AuthorizationError: (status.HTTP_403_FORBIDDEN, "Access denied"),
+    EmailAlreadyRegisteredError: (status.HTTP_409_CONFLICT, "Email already registered"),
+    WalletAlreadyExistsError: (status.HTTP_409_CONFLICT, "Wallet already exists"),
+    UserNotFoundError: (status.HTTP_404_NOT_FOUND, "User not found"),
     UnknownSymbolError: (status.HTTP_404_NOT_FOUND, "Unknown symbol"),
     OrderNotFoundError: (status.HTTP_404_NOT_FOUND, "Order not found"),
     InsufficientFundsError: (status.HTTP_409_CONFLICT, "Insufficient funds"),
