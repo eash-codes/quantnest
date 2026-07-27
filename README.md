@@ -3,18 +3,36 @@
 A trading simulator built with domain-driven design: a FastAPI backend over a
 SQL event-sourced ledger, and a React dashboard for research and paper trading.
 
+**JWT authentication**, per-user wallet ownership, and Docker deployment.
+
+> **New here?** [`docs/PROJECT_WALKTHROUGH.md`](docs/PROJECT_WALKTHROUGH.md) is
+> the complete guide — architecture, request lifecycles, security design,
+> trade-offs and known limitations.
+
 ---
 
 ## Quick start
 
-### Backend
+### Docker (everything at once)
+
+```bash
+cp .env.example .env
+# set JWT_SECRET_KEY — generate with: openssl rand -hex 32
+docker compose up --build
+```
+
+Frontend on `:5173`, API docs on `:8000/docs`.
+Postgres instead of SQLite: `docker compose --profile postgres up --build`.
+
+### Backend (local)
 
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -e ".[dev]"
 
-cp .env.example .env                       # optional, sane defaults apply
+cp .env.example .env
+# set JWT_SECRET_KEY — required in production, optional in development
 
 python scripts/migrate_json_to_db.py       # one-off: data/*.json -> SQLite
 python -m quantnest.main                   # http://localhost:8000/docs
@@ -42,6 +60,10 @@ Every setting is an environment variable; see `.env.example`.
 
 | Variable | Default | Purpose |
 |---|---|---|
+| `JWT_SECRET_KEY` | — | **Required in production**, min 32 chars |
+| `ACCESS_TOKEN_TTL_MINUTES` | `30` | Access token lifetime |
+| `REFRESH_TOKEN_TTL_DAYS` | `7` | Refresh token lifetime |
+| `ENVIRONMENT` | `development` | `production` makes the secret mandatory |
 | `DATABASE_URL` | `sqlite:///./quantnest.db` | Swap to `postgresql+psycopg://…` for Postgres |
 | `QUANTNEST_MARKET_PROVIDER` | `yfinance` | `fake` for offline/CI deterministic pricing |
 | `LOG_FORMAT` | `json` | `console` for readable local logs |
@@ -123,8 +145,8 @@ small **Zustand** store. Styling is **CSS Modules over design tokens** — one
 ## Testing
 
 ```bash
-QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 67 backend tests
-cd frontend && npm test                      # 20 frontend tests
+QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 100 backend tests
+cd frontend && npm test                      # 28 frontend tests
 cd frontend && npm run lint
 ```
 
@@ -133,8 +155,27 @@ provider mean no network access is required.
 
 Coverage includes the wallet ledger (idempotency, replay, overdraft refusal),
 portfolio analytics, the order engine (fills, rejections, limit orders,
-cancellation), API integration across the full stack, the pure P&L maths, and
-React render tests that mount the real component tree.
+cancellation), API integration across the full stack, authentication and
+cross-account isolation, the pure P&L maths, and React render tests that mount
+the real component tree.
+
+## Authentication
+
+Register, receive a wallet, and sign in for a JWT pair — a 30-minute access
+token and a 7-day refresh token. Every wallet-scoped route checks ownership, so
+one user can never read or trade another's wallet.
+
+```bash
+curl -X POST localhost:8000/auth/register \
+  -H 'Content-Type: application/json' \
+  -d '{"email":"you@example.com","password":"at-least-8-chars"}'
+
+curl localhost:8000/portfolio/<wallet_id>/summary \
+  -H "Authorization: Bearer <access_token>"
+```
+
+See the [walkthrough](docs/PROJECT_WALKTHROUGH.md#6-authentication-and-authorisation)
+for the security design and its trade-offs.
 
 ---
 

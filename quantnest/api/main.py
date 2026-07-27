@@ -45,7 +45,7 @@ async def lifespan(_app: FastAPI):
 def create_app() -> FastAPI:
     app = FastAPI(
         title="QuantNest Trading Platform",
-        version="11.0.0",
+        version="11.1.0",
         description="A trading simulator built with domain-driven design.",
         lifespan=lifespan,
     )

@@ -9,6 +9,41 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v11.1.0',
+    date: '2026-07-27',
+    title: 'Authentication, Wallet Ownership & Docker',
+    changes: [
+      {
+        category: 'FEAT',
+        items: [
+          'JWT authentication: register and sign in for a 30-minute access token plus a 7-day refresh token, refreshed transparently by the API client',
+          'Per-user wallet ownership: a wallet_ownership table binds every wallet to an account, and each user can hold several wallets',
+          'Sign-in and registration screen; the dashboard is gated until a session exists, and signing out clears the query cache',
+          'Docker: multi-stage API and frontend images plus a compose file, with PostgreSQL behind an optional profile',
+        ],
+      },
+      {
+        category: 'FIX',
+        items: [
+          'Closed a real vulnerability: any caller could previously read or trade ANY wallet by editing the URL. Every wallet-scoped route now verifies ownership and returns 403 otherwise',
+          'Failed logins hash a dummy password so response time cannot reveal whether an account exists',
+          'Unknown email and wrong password return identical 401s, preventing account enumeration',
+          'A wallet you do not own and one that does not exist both return 403, preventing wallet enumeration',
+          'pyjwt, passlib, bcrypt and pydantic[email] were missing from pyproject.toml — a clean install crashed on import, so the container would have failed at startup',
+        ],
+      },
+      {
+        category: 'ARCH',
+        items: [
+          'UserRepository, WalletOwnershipRepository, PasswordHasher and TokenService added as domain ports, so the domain still imports no crypto or ORM library',
+          'JWT_SECRET_KEY is mandatory when ENVIRONMENT=production and must be at least 32 characters; development falls back to an ephemeral per-process key',
+          'docs/PROJECT_WALKTHROUGH.md: a full guide to the architecture, request lifecycles, security design and trade-offs',
+          'Tests grew from 87 to 128 (100 backend, 28 frontend), including cross-account isolation coverage',
+        ],
+      },
+    ],
+  },
+  {
     version: 'v11.0.0',
     date: '2026-07-26',
     title: 'Production Overhaul — Design System, Modularisation & Robustness',
