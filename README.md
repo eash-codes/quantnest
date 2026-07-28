@@ -6,9 +6,13 @@ SQL event-sourced ledger, and a React dashboard for research and paper trading.
 **JWT authentication** with token revocation, per-user wallet ownership,
 rate-limited auth endpoints, Docker deployment and CI.
 
-> **New here?** [`docs/PROJECT_WALKTHROUGH.md`](docs/PROJECT_WALKTHROUGH.md) is
-> the complete guide — architecture, request lifecycles, security design,
-> trade-offs and known limitations.
+> **New here?** Two documents:
+> - [`docs/CODEBASE_BIBLE.md`](docs/CODEBASE_BIBLE.md) — the complete reference.
+>   Every technology explained from first principles (what, why, and why not the
+>   alternatives), full architecture, code review findings, and an interview
+>   question bank. Written to learn from.
+> - [`docs/PROJECT_WALKTHROUGH.md`](docs/PROJECT_WALKTHROUGH.md) — the shorter
+>   tour, if you just need orientation.
 
 ---
 
@@ -146,7 +150,7 @@ small **Zustand** store. Styling is **CSS Modules over design tokens** — one
 ## Testing
 
 ```bash
-QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 134 backend tests
+QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 142 backend tests
 cd frontend && npm test                      # 35 frontend tests
 cd frontend && npm run lint
 ```

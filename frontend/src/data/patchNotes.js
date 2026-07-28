@@ -9,6 +9,29 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v11.4.0',
+    date: '2026-07-28',
+    title: 'Code Review — Cost Basis Fix & the Codebase Bible',
+    changes: [
+      {
+        category: 'FIX',
+        items: [
+          'Average cost ignored SELL trades entirely, so it averaged over every historical BUY. After selling a position and re-entering at a new price it reported phantom profit: buy 10 at 1650, sell all, buy 1 at 2000 gave a basis of 1109.09 and +890.91 unrealised P&L on a position opened seconds ago at the market price',
+          'Replaced with a running weighted average replayed chronologically — a SELL retires cost proportionally, and closing a position resets the basis. This is the standard moving-average cost method used by brokers',
+          'Invested, P&L and Net Chg. are all corrected, since the frontend reads avg_cost from the API rather than recomputing it',
+        ],
+      },
+      {
+        category: 'ARCH',
+        items: [
+          'docs/CODEBASE_BIBLE.md: a complete reference covering every technology from first principles — what it is, why it was chosen, and why not the alternatives — plus the full architecture, request lifecycles, code review findings, known limitations and an interview question bank',
+          'Code review also verified concurrency (two parallel buys against a wallet funded for one share correctly fill one and reject one), that no response schema exposes a password field, and that no traceback can reach a client',
+          'Tests grew from 169 to 177 (142 backend, 35 frontend)',
+        ],
+      },
+    ],
+  },
+  {
     version: 'v11.3.0',
     date: '2026-07-28',
     title: 'Security Audit — Closed an Authorisation Bypass',

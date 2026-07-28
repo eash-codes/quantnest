@@ -1,7 +1,8 @@
 # QuantNest — Complete Project Walkthrough
 
-> The single reference for understanding this codebase: what it does, how it is
-> built, why each decision was made, and how to explain it under questioning.
+> A guided tour of the codebase. For the exhaustive reference — every
+> technology explained from first principles, the full code review, and the
+> interview question bank — see [`CODEBASE_BIBLE.md`](CODEBASE_BIBLE.md).
 
 **Version 11.3.0** · FastAPI + React · ~5,400 lines of Python, ~8,400 lines of
 frontend · 169 automated tests
@@ -1515,7 +1516,7 @@ cd frontend && npm run dev                                # UI  :5173
 docker compose up --build                                 # both
 
 # Test
-QUANTNEST_MARKET_PROVIDER=fake pytest -q                  # 134 backend
+QUANTNEST_MARKET_PROVIDER=fake pytest -q                  # 142 backend
 cd frontend && npm test                                   # 28 frontend
 cd frontend && npm run lint
 
@@ -1531,7 +1532,7 @@ openssl rand -hex 32                                      # JWT_SECRET_KEY
 |---|---|
 | Backend | 42 files, ~5,000 lines |
 | Frontend | 77 files, ~8,400 lines |
-| Tests | 169 (134 backend, 35 frontend) |
+| Tests | 177 (142 backend, 35 frontend) |
 | Endpoints | 27 |
 | Tables | 6 |
 | Bundle | 482 KB (153 KB gzipped) |
