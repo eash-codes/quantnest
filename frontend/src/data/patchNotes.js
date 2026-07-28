@@ -9,6 +9,30 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v11.3.0',
+    date: '2026-07-28',
+    title: 'Security Audit — Closed an Authorisation Bypass',
+    changes: [
+      {
+        category: 'FIX',
+        items: [
+          'CRITICAL: POST /orders accepted unauthenticated requests and let any signed-in user trade on any wallet. It takes wallet_id in the request body, so it never passed through the path-based dependency that secures every other wallet route',
+          'The endpoint now requires a bearer token and verifies ownership explicitly before placing the order',
+          'The frontend now signs you out when a token refresh fails, instead of leaving you on a dashboard where every request silently errors — this is what you would hit after signing out from another device',
+        ],
+      },
+      {
+        category: 'ARCH',
+        items: [
+          'Added a route-table security audit: it walks every documented endpoint and fails the build if any accepts a caller-supplied wallet id without checking ownership. Thirty-three auth tests passed while the bypass was live, because each only covered a route someone had remembered to secure',
+          'The audit parses each handler AST and strips docstrings, after an earlier version was fooled by a docstring merely mentioning authorize_wallet. Verified by reintroducing the vulnerability and confirming the test fails',
+          'Removed infra/storage.py — dead code at 0% coverage with no remaining references after the SQL migration',
+          'Tests grew from 146 to 169 (134 backend, 35 frontend)',
+        ],
+      },
+    ],
+  },
+  {
     version: 'v11.2.0',
     date: '2026-07-28',
     title: 'Token Revocation, Rate Limiting & CI',

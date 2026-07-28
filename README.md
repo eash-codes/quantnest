@@ -146,8 +146,8 @@ small **Zustand** store. Styling is **CSS Modules over design tokens** — one
 ## Testing
 
 ```bash
-QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 118 backend tests
-cd frontend && npm test                      # 28 frontend tests
+QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 134 backend tests
+cd frontend && npm test                      # 35 frontend tests
 cd frontend && npm run lint
 ```
 

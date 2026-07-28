@@ -343,15 +343,32 @@ export async function authFetch(path, options = {}) {
     if (!(error instanceof ApiError) || error.status !== 401) throw error;
 
     const freshToken = await refreshSession();
-    if (!freshToken) throw error;
 
-    return apiFetch(normalisedPath, {
-      ...options,
-      headers: {
-        ...(options.headers ?? {}),
-        Authorization: `Bearer ${freshToken}`,
-      },
-    });
+    if (!freshToken) {
+      // The refresh token is gone, expired or revoked (for instance the user
+      // signed out everywhere from another device). Clear the local session
+      // so the app falls back to the sign-in screen instead of leaving the
+      // user staring at a dashboard where every request fails.
+      useAuthStore.getState().clearSession();
+      throw error;
+    }
+
+    try {
+      return await apiFetch(normalisedPath, {
+        ...options,
+        headers: {
+          ...(options.headers ?? {}),
+          Authorization: `Bearer ${freshToken}`,
+        },
+      });
+    } catch (retryError) {
+      // A 401 even with a freshly minted token means the session is genuinely
+      // finished; do not loop.
+      if (retryError instanceof ApiError && retryError.status === 401) {
+        useAuthStore.getState().clearSession();
+      }
+      throw retryError;
+    }
   }
 }
 

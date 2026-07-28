@@ -7,7 +7,14 @@ from typing import Optional
 
 from fastapi import APIRouter, Query, status
 
-from quantnest.api.deps import HistoryServiceDep, OrderEngineDep, TransactionIdDep, WalletIdDep
+from quantnest.api.deps import (
+    AuthServiceDep,
+    CurrentUserDep,
+    HistoryServiceDep,
+    OrderEngineDep,
+    TransactionIdDep,
+    WalletIdDep,
+)
 from quantnest.api.schemas import OrderResponse, PlaceOrderRequest
 from quantnest.domain.exceptions import OrderNotFoundError
 from quantnest.domain.order import Order
@@ -46,15 +53,23 @@ async def place_order(
     request: PlaceOrderRequest,
     transaction_id: TransactionIdDep,
     engine: OrderEngineDep,
+    current_user: CurrentUserDep,
+    auth: AuthServiceDep,
 ) -> OrderResponse:
     """Place a MARKET, LIMIT or STOP_LOSS order.
 
     Rejections are returned as an order carrying ``status=REJECTED`` and a
     ``rejection_reason``, rather than as an HTTP error, so every attempt is
     auditable.
+
+    The wallet id arrives in the body rather than the path, so it cannot use
+    the path-based ``WalletIdDep``. Ownership is therefore checked explicitly
+    here — without it this endpoint would bypass the entire ownership model.
     """
+    wallet_id = auth.authorize_wallet(current_user, request.wallet_id)
+
     order = engine.place_order(
-        wallet_id=request.wallet_id,
+        wallet_id=wallet_id,
         symbol=request.symbol,
         side=request.side,
         quantity=request.quantity,

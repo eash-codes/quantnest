@@ -54,6 +54,13 @@ jobs:
           fi
           echo "No stray print() calls"
 
+      - name: Route security audit
+        # Walks the whole route table and fails if any endpoint accepts a
+        # caller-supplied wallet id without verifying ownership. Added after
+        # POST /orders shipped unprotected because it takes wallet_id in the
+        # body and so bypassed the path-based dependency.
+        run: pytest tests/integration/test_route_security.py -q
+
       - name: Tests
         run: pytest -q --cov=quantnest --cov-report=term-missing --cov-report=xml
 

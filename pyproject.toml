@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "quantnest"
-version = "11.2.0"
+version = "11.3.0"
 description = "A trading simulator built with domain-driven design"
 requires-python = ">=3.10"
 dependencies = [

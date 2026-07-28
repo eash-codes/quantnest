@@ -3,8 +3,8 @@
 > The single reference for understanding this codebase: what it does, how it is
 > built, why each decision was made, and how to explain it under questioning.
 
-**Version 11.2.0** · FastAPI + React · ~5,400 lines of Python, ~8,400 lines of
-frontend · 146 automated tests
+**Version 11.3.0** · FastAPI + React · ~5,400 lines of Python, ~8,400 lines of
+frontend · 169 automated tests
 
 ---
 
@@ -431,6 +431,37 @@ next refresh fails, which is a detectable signal.
 > successful password login: proving the password re-establishes exactly the
 > trust that `logout-all` withdrew, and it sidesteps the resolution mismatch
 > entirely. Both directions now have tests.
+
+### A hole the per-route tests missed
+
+`POST /orders` shipped **unprotected**. Unlike every other wallet route it
+takes `wallet_id` in the request *body*, so it never passed through the
+path-based `WalletIdDep`:
+
+```python
+# Before — no authentication, no ownership check.
+async def place_order(request: PlaceOrderRequest, engine: OrderEngineDep):
+    order = engine.place_order(wallet_id=request.wallet_id, ...)
+```
+
+Any caller — signed in or not — could trade on any wallet. The fix is explicit,
+because the path-based dependency cannot apply here:
+
+```python
+wallet_id = auth.authorize_wallet(current_user, request.wallet_id)
+```
+
+**The lesson is the interesting part.** Thirty-three auth tests passed while
+this was live, because each tested a route someone remembered to secure. The
+gap was structural, so the fix is too: `tests/integration/test_route_security.py`
+walks the entire OpenAPI route table and asserts that anything touching a
+caller-supplied `wallet_id` verifies ownership. A new endpoint cannot repeat
+the mistake without failing the build.
+
+The audit parses each handler's AST and strips docstrings first — an early
+version matched raw source and was fooled by a docstring that merely mentioned
+`authorize_wallet`. It was verified by reintroducing the vulnerability and
+confirming the test fails.
 
 ### Rate limiting
 
@@ -1034,7 +1065,7 @@ Verified live, not just asserted.
 
 ## 12. Testing strategy
 
-### 146 tests
+### 169 tests
 
 | Suite | Count | Scope |
 |---|---|---|
@@ -1044,15 +1075,18 @@ Verified live, not just asserted.
 | `tests/integration/test_api.py` | 24 | Full stack via HTTP |
 | `tests/integration/test_auth.py` | 33 | Auth, authorisation, isolation |
 | `tests/integration/test_revocation.py` | 18 | Sign-out, rotation, rate limiting |
+| `tests/integration/test_orders_authz.py` | 4 | Body-supplied wallet ownership |
+| `tests/integration/test_route_security.py` | 12 | Whole-route-table security audit |
 | `frontend/src/lib/portfolioMath.test.js` | 13 | Pure P&L maths |
 | `frontend/src/App.test.jsx` | 7 | Real component tree render |
 | `frontend/src/pages/AuthPage.test.jsx` | 8 | Auth gate |
+| `frontend/src/lib/apiClient.test.js` | 7 | Token refresh and sign-out paths |
 
 Hermetic: in-memory SQLite + deterministic market provider. No network, no
 database file, no fixtures to clean up.
 
 ```bash
-QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 118 passed
+QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 134 passed
 cd frontend && npm test                      # 28 passed
 ```
 
@@ -1323,6 +1357,7 @@ Stated plainly — knowing what you have *not* built matters as much as what you
 | ~~No rate limiting~~ | **Fixed in v11.2.0** — 10/5min login, 5/hour register | — |
 | **Single-process rate limiting** | N replicas allow N× the budget | Redis `INCR`/`EXPIRE` |
 | **Blocklist grows until purged** | `purge_expired()` exists but is not scheduled | Cron or a startup task |
+| **Refresh rotation has no reuse alarm** | A replayed token 401s but raises no alert | Detect reuse, revoke the family |
 | **`localStorage` tokens** | XSS-readable | `httpOnly` cookies + CSRF |
 | **No email verification** | Anyone can register any address | Verification link flow |
 | **No password reset** | Locked out permanently | Time-limited reset token |
@@ -1480,7 +1515,7 @@ cd frontend && npm run dev                                # UI  :5173
 docker compose up --build                                 # both
 
 # Test
-QUANTNEST_MARKET_PROVIDER=fake pytest -q                  # 100 backend
+QUANTNEST_MARKET_PROVIDER=fake pytest -q                  # 134 backend
 cd frontend && npm test                                   # 28 frontend
 cd frontend && npm run lint
 
@@ -1496,7 +1531,7 @@ openssl rand -hex 32                                      # JWT_SECRET_KEY
 |---|---|
 | Backend | 42 files, ~5,000 lines |
 | Frontend | 77 files, ~8,400 lines |
-| Tests | 128 (100 backend, 28 frontend) |
+| Tests | 169 (134 backend, 35 frontend) |
 | Endpoints | 27 |
 | Tables | 6 |
 | Bundle | 482 KB (153 KB gzipped) |

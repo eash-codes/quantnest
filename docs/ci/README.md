@@ -21,7 +21,7 @@ Pushing from your own account carries the `workflow` scope, so this succeeds.
 
 | Job | Steps |
 |---|---|
-| **backend** | Python 3.11 + 3.12 · architecture check · `print()` check · pytest with coverage |
+| **backend** | Python 3.11 + 3.12 · architecture check · `print()` check · route security audit · pytest with coverage |
 | **frontend** | `npm ci` · lint · tests · production build · upload bundle |
 | **docker** | build both images · boot the API container · register a user · assert an unauthenticated request is refused |
 
@@ -34,6 +34,7 @@ were missing from `pyproject.toml`.
 
 ```bash
 python scripts/check_architecture.py                    # DDD boundary
+QUANTNEST_MARKET_PROVIDER=fake pytest tests/integration/test_route_security.py -q
 QUANTNEST_MARKET_PROVIDER=fake pytest -q                # 118 backend tests
 cd frontend && npm run lint && npm test && npm run build
 ```
