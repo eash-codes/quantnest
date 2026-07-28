@@ -1180,7 +1180,12 @@ docker compose --profile postgres up --build
 
 ## 13a. Continuous integration
 
-`.github/workflows/ci.yml` runs three jobs on every push and pull request:
+The pipeline lives at **`docs/ci/github-actions-ci.yml`** and activates with
+one copy into `.github/workflows/` — see `docs/ci/README.md`. It ships there
+because the token used for these commits lacks GitHub's `workflows`
+permission, which blocks any push that touches that directory.
+
+It runs three jobs on every push and pull request:
 
 | Job | Does |
 |---|---|
