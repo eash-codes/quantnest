@@ -141,18 +141,52 @@ class Portfolio:
         return _money(self.cash() + self.total_asset_value())
 
     def avg_cost(self, symbol: str) -> Decimal:
-        """Quantity-weighted average price across all BUY trades."""
-        bought_quantity = Decimal("0")
-        bought_cost = Decimal("0")
+        """Weighted average cost of the shares *currently held*.
 
-        for trade in self._trades:
-            if trade.symbol == symbol and trade.side == "BUY":
-                bought_quantity += trade.quantity
-                bought_cost += trade.quantity * trade.price
+        Replays the symbol's trades in order, maintaining a running position
+        and cost pool:
 
-        if bought_quantity == 0:
+        * a BUY adds its full cost to the pool
+        * a SELL removes cost proportionally, leaving the average unchanged
+          (the difference between sale price and basis is realised profit,
+          which is not part of cost basis)
+        * closing the position empties the pool, so a later re-entry starts
+          from its own price
+
+        Averaging over every historical BUY instead — the naive approach —
+        leaks the cost of already-sold shares into the price of shares still
+        held. Buying 10 at 1650, selling all 10, then buying 1 at 2000 would
+        report a basis of 1109.09 rather than 2000, showing phantom profit on
+        a position opened moments ago at the current market price.
+        """
+        held = Decimal("0")
+        cost_pool = Decimal("0")
+
+        for trade in sorted(
+            (t for t in self._trades if t.symbol == symbol),
+            key=lambda t: t.timestamp,
+        ):
+            if trade.side == "BUY":
+                held += trade.quantity
+                cost_pool += trade.quantity * trade.price
+                continue
+
+            # SELL: retire cost in proportion to the shares leaving.
+            if held <= 0:
+                continue
+
+            sold = min(trade.quantity, held)
+            cost_pool -= (cost_pool / held) * sold
+            held -= sold
+
+            if held <= 0:
+                # Position fully closed: the next buy starts a fresh basis.
+                held = Decimal("0")
+                cost_pool = Decimal("0")
+
+        if held <= 0:
             return Decimal("0.00")
-        return _money(bought_cost / bought_quantity)
+        return _money(cost_pool / held)
 
     def unrealized_pnl(self, symbol: str) -> Decimal:
         quantity = self._positions.get(symbol, Decimal("0"))
