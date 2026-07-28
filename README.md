@@ -3,7 +3,8 @@
 A trading simulator built with domain-driven design: a FastAPI backend over a
 SQL event-sourced ledger, and a React dashboard for research and paper trading.
 
-**JWT authentication**, per-user wallet ownership, and Docker deployment.
+**JWT authentication** with token revocation, per-user wallet ownership,
+rate-limited auth endpoints, Docker deployment and CI.
 
 > **New here?** [`docs/PROJECT_WALKTHROUGH.md`](docs/PROJECT_WALKTHROUGH.md) is
 > the complete guide — architecture, request lifecycles, security design,
@@ -145,7 +146,7 @@ small **Zustand** store. Styling is **CSS Modules over design tokens** — one
 ## Testing
 
 ```bash
-QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 100 backend tests
+QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 118 backend tests
 cd frontend && npm test                      # 28 frontend tests
 cd frontend && npm run lint
 ```
@@ -173,6 +174,10 @@ curl -X POST localhost:8000/auth/register \
 curl localhost:8000/portfolio/<wallet_id>/summary \
   -H "Authorization: Bearer <access_token>"
 ```
+
+Sign-out genuinely revokes the token server-side (`POST /auth/logout`), refresh
+tokens rotate on use, and `/auth/login` is throttled to 10 attempts per 5
+minutes.
 
 See the [walkthrough](docs/PROJECT_WALKTHROUGH.md#6-authentication-and-authorisation)
 for the security design and its trade-offs.

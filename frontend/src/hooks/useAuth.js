@@ -53,10 +53,37 @@ export function useLogout() {
   const clearSession = useAuthStore((s) => s.clearSession);
   const queryClient = useQueryClient();
 
-  return () => {
+  return async () => {
+    const { accessToken, refreshToken } = useAuthStore.getState();
+
+    // Tell the server to revoke the tokens. Without this the JWT stays
+    // valid until it expires and sign-out is only a local illusion.
+    if (accessToken) {
+      try {
+        await authApi.post('/auth/logout', refreshToken ? { refresh_token: refreshToken } : {});
+      } catch {
+        // A failed revoke must not trap the user in a signed-in state; the
+        // local session is cleared regardless.
+      }
+    }
+
     clearSession();
     queryClient.clear();
   };
+}
+
+/** Revoke every session for this account, on all devices. */
+export function useLogoutEverywhere() {
+  const clearSession = useAuthStore((s) => s.clearSession);
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: () => authApi.post('/auth/logout-all', {}),
+    onSettled: () => {
+      clearSession();
+      queryClient.clear();
+    },
+  });
 }
 
 export function useCreateWallet() {

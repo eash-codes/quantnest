@@ -9,6 +9,38 @@
 
 export const PATCH_NOTES = [
   {
+    version: 'v11.2.0',
+    date: '2026-07-28',
+    title: 'Token Revocation, Rate Limiting & CI',
+    changes: [
+      {
+        category: 'FEAT',
+        items: [
+          'Sign-out now genuinely revokes the token server-side. Previously a stateless JWT stayed valid until it expired, so signing out was cosmetic',
+          'Sign out everywhere: one per-user cutoff invalidates every session at once, rather than one record per token',
+          'Refresh-token rotation: redeeming a refresh token revokes it, so a leaked token is useless once the real client has used it',
+          'Rate limiting on the auth endpoints — 10 login attempts per 5 minutes, 5 registrations per hour, answered with 429 and a Retry-After header',
+          'A successful login clears the throttle, so one user fumbling a password cannot lock out everyone behind the same NAT address',
+          'GitHub Actions CI: backend tests on Python 3.11 and 3.12, frontend lint/test/build, and a Docker job that boots the image and exercises it',
+        ],
+      },
+      {
+        category: 'FIX',
+        items: [
+          'Signing back in immediately after "sign out everywhere" was locked out: JWT iat is integer epoch seconds while the cutoff had microsecond precision, so a newer token compared as older. A successful password login now clears the cutoff',
+        ],
+      },
+      {
+        category: 'ARCH',
+        items: [
+          'TokenBlocklist added as a domain port with SQL and in-memory adapters; a Redis implementation would satisfy the same interface',
+          'scripts/check_architecture.py parses the AST to enforce the DDD boundary in CI, allowing deliberate lazy imports inside function bodies while rejecting module-level ones',
+          'Tests grew from 128 to 146 (118 backend, 28 frontend)',
+        ],
+      },
+    ],
+  },
+  {
     version: 'v11.1.0',
     date: '2026-07-27',
     title: 'Authentication, Wallet Ownership & Docker',

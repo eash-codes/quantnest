@@ -84,6 +84,16 @@ class UserNotFoundError(DomainError):
     code = "user_not_found"
 
 
+class RateLimitExceededError(DomainError):
+    """Too many attempts in the current window. Maps to HTTP 429."""
+
+    code = "rate_limit_exceeded"
+
+    def __init__(self, message: str, retry_after: int = 60) -> None:
+        super().__init__(message)
+        self.retry_after = retry_after
+
+
 class WalletAlreadyExistsError(DomainError):
     """A wallet with that id is already taken. HTTP 409."""
 

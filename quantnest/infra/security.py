@@ -114,9 +114,21 @@ class JwtTokenService:
     # ── Verifying ────────────────────────────────────────────────────────
 
     def verify_access_token(self, token: str) -> str:
-        return self._decode(token, expected_type="access")
+        return self._decode(token, expected_type="access")["sub"]
 
     def verify_refresh_token(self, token: str) -> str:
+        return self._decode(token, expected_type="refresh")["sub"]
+
+    def decode_access_token(self, token: str) -> Dict[str, Any]:
+        """Full verified claims, including ``jti`` and ``iat``.
+
+        Revocation needs the token identity and issue time, not just the
+        subject, so this sits alongside the subject-only methods that satisfy
+        the TokenService port.
+        """
+        return self._decode(token, expected_type="access")
+
+    def decode_refresh_token(self, token: str) -> Dict[str, Any]:
         return self._decode(token, expected_type="refresh")
 
     @property
@@ -137,7 +149,7 @@ class JwtTokenService:
         }
         return jwt.encode(payload, self._secret, algorithm=JWT_ALGORITHM)
 
-    def _decode(self, token: str, expected_type: str) -> str:
+    def _decode(self, token: str, expected_type: str) -> Dict[str, Any]:
         if not token:
             raise AuthenticationError("Authentication token is missing")
 
@@ -147,7 +159,7 @@ class JwtTokenService:
                 self._secret,
                 algorithms=[JWT_ALGORITHM],
                 issuer=JWT_ISSUER,
-                options={"require": ["exp", "sub", "iss"]},
+                options={"require": ["exp", "sub", "iss", "jti", "iat"]},
             )
         except jwt.ExpiredSignatureError:
             raise AuthenticationError("Your session has expired; please sign in again")
@@ -163,7 +175,7 @@ class JwtTokenService:
         if not subject:
             raise AuthenticationError("Invalid authentication token")
 
-        return str(subject)
+        return payload
 
 
 _hasher_singleton: BcryptPasswordHasher | None = None

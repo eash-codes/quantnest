@@ -25,6 +25,7 @@ from quantnest.domain.exceptions import (
     OrderExecutionError,
     OrderNotFoundError,
     OrderStateError,
+    RateLimitExceededError,
     UnknownSymbolError,
     UserNotFoundError,
     ValidationError as DomainValidationError,
@@ -44,6 +45,7 @@ _DOMAIN_STATUS_MAP: dict[type[DomainError], tuple[int, str]] = {
     EmailAlreadyRegisteredError: (status.HTTP_409_CONFLICT, "Email already registered"),
     WalletAlreadyExistsError: (status.HTTP_409_CONFLICT, "Wallet already exists"),
     UserNotFoundError: (status.HTTP_404_NOT_FOUND, "User not found"),
+    RateLimitExceededError: (status.HTTP_429_TOO_MANY_REQUESTS, "Too many requests"),
     UnknownSymbolError: (status.HTTP_404_NOT_FOUND, "Unknown symbol"),
     OrderNotFoundError: (status.HTTP_404_NOT_FOUND, "Order not found"),
     InsufficientFundsError: (status.HTTP_409_CONFLICT, "Insufficient funds"),
@@ -99,13 +101,20 @@ def register_exception_handlers(app: FastAPI) -> None:
             },
         )
 
-        return _problem(
+        response = _problem(
             request,
             status_code=status_code,
             title=title,
             detail=str(exc),
             error_type=exc.code,
         )
+
+        # Tell a rate-limited client when it may try again.
+        retry_after = getattr(exc, "retry_after", None)
+        if retry_after is not None:
+            response.headers["Retry-After"] = str(int(retry_after))
+
+        return response
 
     @app.exception_handler(RequestValidationError)
     async def handle_validation_error(

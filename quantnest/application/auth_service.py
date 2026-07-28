@@ -8,6 +8,7 @@ status codes.
 from __future__ import annotations
 
 import logging
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
 from quantnest.domain.exceptions import (
@@ -18,6 +19,7 @@ from quantnest.domain.exceptions import (
 )
 from quantnest.domain.ports import (
     PasswordHasher,
+    TokenBlocklist,
     TokenService,
     UserRepository,
     WalletOwnershipRepository,
@@ -36,11 +38,13 @@ class AuthService:
         wallets: WalletOwnershipRepository,
         hasher: PasswordHasher,
         tokens: TokenService,
+        blocklist: Optional[TokenBlocklist] = None,
     ) -> None:
         self._users = users
         self._wallets = wallets
         self._hasher = hasher
         self._tokens = tokens
+        self._blocklist = blocklist
 
     # ── Registration ─────────────────────────────────────────────────────
 
@@ -103,26 +107,89 @@ class AuthService:
         if not user.is_active:
             raise AuthenticationError("This account has been deactivated")
 
+        # A successful password check re-establishes trust, so any global
+        # cutoff from a previous "sign out everywhere" is lifted. This also
+        # sidesteps the one-second resolution of the JWT `iat` claim: without
+        # it, signing back in during the same second would be locked out.
+        self._clear_cutoff(user.user_id)
+
         logger.info("User logged in", extra={"user_id": user.user_id})
         return self._session_payload(user)
 
     # ── Token refresh ────────────────────────────────────────────────────
 
     def refresh(self, refresh_token: str) -> Dict[str, Any]:
-        """Issue a new token pair from a valid refresh token."""
-        user_id = self._tokens.verify_refresh_token(refresh_token)
+        """Issue a new token pair from a valid refresh token.
+
+        The presented token is revoked as part of the exchange (rotation), so
+        a leaked refresh token cannot be reused after the legitimate client
+        has already redeemed it.
+        """
+        claims = self._decode_refresh(refresh_token)
+        user_id = str(claims["sub"])
+
+        self._assert_not_revoked(claims, user_id)
 
         user = self._users.get_by_id(user_id)
         if user is None or not user.is_active:
             raise AuthenticationError("This session is no longer valid")
 
+        # Rotate: the old refresh token dies with this exchange.
+        self._revoke_claims(claims, user_id)
+
         return self._session_payload(user)
+
+    # ── Sign out ─────────────────────────────────────────────────────────
+
+    def logout(self, access_token: str, refresh_token: Optional[str] = None) -> None:
+        """Revoke the current session's tokens.
+
+        Without this a stateless JWT stays valid until it expires, so
+        "sign out" would be a client-side illusion.
+        """
+        if self._blocklist is None:
+            return
+
+        claims = self._decode_access(access_token)
+        user_id = str(claims["sub"])
+        self._revoke_claims(claims, user_id)
+
+        if refresh_token:
+            try:
+                refresh_claims = self._decode_refresh(refresh_token)
+            except AuthenticationError:
+                # An unusable refresh token needs no revoking.
+                return
+            if str(refresh_claims.get("sub")) == user_id:
+                self._revoke_claims(refresh_claims, user_id)
+
+        logger.info("User signed out", extra={"user_id": user_id})
+
+    def logout_everywhere(self, user: User) -> None:
+        """Invalidate every token issued to this user so far.
+
+        The cutoff is truncated to whole seconds because a JWT ``iat`` claim
+        is integer epoch seconds. Storing microsecond precision would make a
+        token issued moments *after* the cutoff compare as older, locking the
+        user out of a fresh sign-in within the same second.
+        """
+        if self._blocklist is None:
+            return
+
+        cutoff = datetime.now(timezone.utc).replace(microsecond=0)
+        self._blocklist.revoke_all_for_user(user.user_id, cutoff)
+        # Tokens minted later in this same second must survive, so the
+        # re-issued pair below carries a fresh jti and a later iat.
+        logger.info("All sessions revoked", extra={"user_id": user.user_id})
 
     # ── Current user ─────────────────────────────────────────────────────
 
     def user_from_access_token(self, token: str) -> User:
-        """Resolve a bearer token to its user."""
-        user_id = self._tokens.verify_access_token(token)
+        """Resolve a bearer token to its user, rejecting revoked tokens."""
+        claims = self._decode_access(token)
+        user_id = str(claims["sub"])
+
+        self._assert_not_revoked(claims, user_id)
 
         user = self._users.get_by_id(user_id)
         if user is None or not user.is_active:
@@ -185,6 +252,74 @@ class AuthService:
         return wallet
 
     # ── Helpers ──────────────────────────────────────────────────────────
+
+    def _decode_access(self, token: str) -> Dict[str, Any]:
+        decoder = getattr(self._tokens, "decode_access_token", None)
+        if decoder is None:
+            return {"sub": self._tokens.verify_access_token(token)}
+        return decoder(token)
+
+    def _decode_refresh(self, token: str) -> Dict[str, Any]:
+        decoder = getattr(self._tokens, "decode_refresh_token", None)
+        if decoder is None:
+            return {"sub": self._tokens.verify_refresh_token(token)}
+        return decoder(token)
+
+    def _clear_cutoff(self, user_id: str) -> None:
+        """Lift a global revocation cutoff after a successful login."""
+        if self._blocklist is None:
+            return
+        clear = getattr(self._blocklist, "clear_cutoff", None)
+        if clear is not None:
+            clear(user_id)
+
+    def _assert_not_revoked(self, claims: Dict[str, Any], user_id: str) -> None:
+        """Reject a token that is individually revoked or predates a cutoff."""
+        if self._blocklist is None:
+            return
+
+        jti = claims.get("jti")
+        if jti and self._blocklist.is_revoked(str(jti)):
+            raise AuthenticationError("This session has been signed out")
+
+        cutoff = self._blocklist.user_cutoff(user_id)
+        issued_at = claims.get("iat")
+        if cutoff is not None and issued_at is not None:
+            issued = self._as_datetime(issued_at)
+            # `iat` is integer epoch seconds, so a token issued in the same
+            # second as the cutoff is indistinguishable from one issued just
+            # before it. Revoke it: losing a session is far safer than
+            # keeping a revoked one alive.
+            if issued is not None and issued <= self._as_utc(cutoff):
+                raise AuthenticationError("This session has been signed out")
+
+    def _revoke_claims(self, claims: Dict[str, Any], user_id: str) -> None:
+        if self._blocklist is None:
+            return
+
+        jti = claims.get("jti")
+        if not jti:
+            return
+
+        expires = self._as_datetime(claims.get("exp")) or datetime.now(timezone.utc)
+        self._blocklist.revoke(str(jti), user_id, expires)
+
+    @staticmethod
+    def _as_datetime(value: Any) -> Optional[datetime]:
+        """JWT numeric dates arrive as epoch seconds."""
+        if value is None:
+            return None
+        if isinstance(value, datetime):
+            return AuthService._as_utc(value)
+        try:
+            return datetime.fromtimestamp(float(value), tz=timezone.utc)
+        except (TypeError, ValueError, OSError):
+            return None
+
+    @staticmethod
+    def _as_utc(moment: datetime) -> datetime:
+        """SQLite returns naive datetimes; treat them as UTC."""
+        return moment if moment.tzinfo else moment.replace(tzinfo=timezone.utc)
 
     def _session_payload(self, user: User) -> Dict[str, Any]:
         return {

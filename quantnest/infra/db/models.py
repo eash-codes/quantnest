@@ -70,6 +70,40 @@ class WalletOwnershipRow(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
 
 
+class RevokedTokenRow(Base):
+    """Tokens explicitly revoked before their natural expiry.
+
+    Rows are deleted once ``expires_at`` passes: after that the JWT is
+    rejected by its own ``exp`` claim, so the record earns nothing.
+    """
+
+    __tablename__ = "revoked_tokens"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    jti: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, index=True)
+    expires_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, index=True)
+    revoked_at: Mapped[datetime] = mapped_column(DateTime, nullable=False, default=utcnow)
+
+
+class UserTokenCutoffRow(Base):
+    """Per-user 'sign out everywhere' marker.
+
+    One row per user instead of one per token: any token issued before
+    ``issued_before`` is rejected, which revokes a whole fleet of sessions
+    with a single write.
+    """
+
+    __tablename__ = "user_token_cutoffs"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True, autoincrement=True)
+    user_id: Mapped[str] = mapped_column(String(36), nullable=False, unique=True, index=True)
+    issued_before: Mapped[datetime] = mapped_column(DateTime, nullable=False)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, nullable=False, default=utcnow, onupdate=utcnow
+    )
+
+
 class WalletEventRow(Base):
     """Append-only wallet ledger. Rows are never updated or deleted."""
 

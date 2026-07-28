@@ -8,7 +8,7 @@ from __future__ import annotations
 
 import logging
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 from typing import Dict, List, Optional
 
@@ -24,8 +24,10 @@ from quantnest.domain.user import User, Wallet as WalletOwnership
 from .models import (
     OrderRow,
     PositionRow,
+    RevokedTokenRow,
     TradeRow,
     UserRow,
+    UserTokenCutoffRow,
     WalletEventRow,
     WalletOwnershipRow,
 )
@@ -331,3 +333,71 @@ class SqlWalletOwnershipRepository:
             label=row.label,
             created_at=row.created_at,
         )
+
+
+class SqlTokenBlocklist:
+    """:class:`~quantnest.domain.ports.TokenBlocklist` backed by SQL.
+
+    A Redis implementation would satisfy the same port: ``SETEX jti ttl 1``
+    for :meth:`revoke` and ``EXISTS`` for :meth:`is_revoked`, with Redis TTLs
+    replacing :meth:`purge_expired`. Nothing above this class would change.
+    """
+
+    def __init__(self, session: Session) -> None:
+        self._session = session
+
+    def revoke(self, jti: str, user_id: str, expires_at: datetime) -> None:
+        existing = self._session.scalar(
+            select(RevokedTokenRow.id).where(RevokedTokenRow.jti == jti)
+        )
+        if existing is not None:
+            return  # already revoked; revoking twice is a no-op
+
+        self._session.add(
+            RevokedTokenRow(jti=jti, user_id=user_id, expires_at=expires_at)
+        )
+        self._session.flush()
+
+    def is_revoked(self, jti: str) -> bool:
+        return (
+            self._session.scalar(
+                select(RevokedTokenRow.id).where(RevokedTokenRow.jti == jti)
+            )
+            is not None
+        )
+
+    def revoke_all_for_user(self, user_id: str, issued_before: datetime) -> None:
+        row = self._session.scalar(
+            select(UserTokenCutoffRow).where(UserTokenCutoffRow.user_id == user_id)
+        )
+        if row is None:
+            self._session.add(
+                UserTokenCutoffRow(user_id=user_id, issued_before=issued_before)
+            )
+        else:
+            # Only ever move the cutoff forward.
+            if issued_before > row.issued_before:
+                row.issued_before = issued_before
+        self._session.flush()
+
+    def user_cutoff(self, user_id: str) -> Optional[datetime]:
+        return self._session.scalar(
+            select(UserTokenCutoffRow.issued_before).where(
+                UserTokenCutoffRow.user_id == user_id
+            )
+        )
+
+    def clear_cutoff(self, user_id: str) -> None:
+        """Drop the global cutoff, called after a successful password login."""
+        self._session.execute(
+            delete(UserTokenCutoffRow).where(UserTokenCutoffRow.user_id == user_id)
+        )
+        self._session.flush()
+
+    def purge_expired(self, now: Optional[datetime] = None) -> int:
+        moment = now or datetime.now(timezone.utc)
+        result = self._session.execute(
+            delete(RevokedTokenRow).where(RevokedTokenRow.expires_at <= moment)
+        )
+        self._session.flush()
+        return int(result.rowcount or 0)

@@ -3,8 +3,8 @@
 > The single reference for understanding this codebase: what it does, how it is
 > built, why each decision was made, and how to explain it under questioning.
 
-**Version 11.1.0** · FastAPI + React · ~5,000 lines of Python, ~8,400 lines of
-frontend · 128 automated tests
+**Version 11.2.0** · FastAPI + React · ~5,400 lines of Python, ~8,400 lines of
+frontend · 146 automated tests
 
 ---
 
@@ -389,6 +389,7 @@ Request       Authorization: Bearer <access>
 | Lifetime | 30 minutes | 7 days |
 | Sent | every request | only to `/auth/refresh` |
 | Claim | `type: "access"` | `type: "refresh"` |
+| Revocable | yes, by `jti` | yes, and rotated on every use |
 
 The `type` claim is load-bearing. Without it, a stolen refresh token — which
 lives far longer — could be replayed as an access token:
@@ -400,6 +401,56 @@ if payload.get("type") != expected_type:
 
 There is a test for exactly this
 (`test_refresh_token_cannot_be_used_as_an_access_token`).
+
+### Token revocation
+
+A stateless JWT is valid until it expires, so "sign out" would be cosmetic
+without a server-side record of revoked tokens. Two granularities:
+
+```python
+POST /auth/logout       # revoke this session's tokens, by jti
+POST /auth/logout-all   # revoke every token issued before now, by cutoff
+```
+
+Individual revocation stores the token's `jti` until its natural expiry;
+after that the `exp` claim rejects it anyway, so the row is purged. Global
+revocation writes **one** row per user rather than one per token, so
+invalidating a whole fleet of sessions is a single write.
+
+**Refresh-token rotation.** Redeeming a refresh token revokes it and issues a
+new pair. A leaked refresh token is therefore useless once the legitimate
+client has used it — and if the attacker gets there first, the real user's
+next refresh fails, which is a detectable signal.
+
+> **A subtle bug found while building this.** JWT `iat` is *integer epoch
+> seconds*, but the cutoff was stored with microsecond precision. A user who
+> signed out everywhere and immediately signed back in was locked out: the new
+> token's truncated `iat` compared as *older* than the cutoff. Truncating the
+> cutoff alone then broke the opposite case — sessions created in the same
+> second survived revocation. The resolution was to clear the cutoff on a
+> successful password login: proving the password re-establishes exactly the
+> trust that `logout-all` withdrew, and it sidesteps the resolution mismatch
+> entirely. Both directions now have tests.
+
+### Rate limiting
+
+`/auth/login` and `/auth/register` are throttled per client IP with a
+fixed-window counter (`infra/rate_limit.py`):
+
+| Endpoint | Budget | Window |
+|---|---|---|
+| `POST /auth/login` | 10 | 5 minutes |
+| `POST /auth/register` | 5 | 1 hour |
+
+Exceeding it returns **429** with a `Retry-After` header. A *successful* login
+clears the counter, so one user fumbling their password cannot lock out
+everyone else behind the same NAT address.
+
+Fixed-window was chosen over a sliding log for constant memory per key. Its
+known weakness — up to 2× the limit across a window boundary — is an
+acceptable trade for guarding a login form. The counter is **in-process**, so
+N replicas permit N times the budget; the class is shaped like the Redis
+equivalent (`INCR` + `EXPIRE`) so swapping it touches one file.
 
 ### One dependency secures fifteen routes
 
@@ -581,13 +632,15 @@ events for `demo-user`).
 
 ## 8. The API layer
 
-### 27 endpoints
+### 29 endpoints
 
 | Group | Endpoint | Auth |
 |---|---|---|
 | **auth** | `POST /auth/register` | public |
 | | `POST /auth/login` | public |
 | | `POST /auth/refresh` | public |
+| | `POST /auth/logout` | bearer |
+| | `POST /auth/logout-all` | bearer |
 | | `GET /auth/me` | bearer |
 | | `GET /auth/wallets` | bearer |
 | | `POST /auth/wallets` | bearer |
@@ -981,7 +1034,7 @@ Verified live, not just asserted.
 
 ## 12. Testing strategy
 
-### 128 tests
+### 146 tests
 
 | Suite | Count | Scope |
 |---|---|---|
@@ -990,6 +1043,7 @@ Verified live, not just asserted.
 | `tests/unit/domain/test_order_engine.py` | 16 | Fills, rejections, limits, cancellation |
 | `tests/integration/test_api.py` | 24 | Full stack via HTTP |
 | `tests/integration/test_auth.py` | 33 | Auth, authorisation, isolation |
+| `tests/integration/test_revocation.py` | 18 | Sign-out, rotation, rate limiting |
 | `frontend/src/lib/portfolioMath.test.js` | 13 | Pure P&L maths |
 | `frontend/src/App.test.jsx` | 7 | Real component tree render |
 | `frontend/src/pages/AuthPage.test.jsx` | 8 | Auth gate |
@@ -998,7 +1052,7 @@ Hermetic: in-memory SQLite + deterministic market provider. No network, no
 database file, no fixtures to clean up.
 
 ```bash
-QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 100 passed
+QUANTNEST_MARKET_PROVIDER=fake pytest -q     # 118 passed
 cd frontend && npm test                      # 28 passed
 ```
 
@@ -1124,6 +1178,34 @@ docker compose --profile postgres up --build
 
 ---
 
+## 13a. Continuous integration
+
+`.github/workflows/ci.yml` runs three jobs on every push and pull request:
+
+| Job | Does |
+|---|---|
+| **backend** | Python 3.11 and 3.12 matrix, architecture check, `print()` check, pytest with coverage |
+| **frontend** | lint, tests, production build, uploads the bundle |
+| **docker** | builds both images, boots the API container, registers a user, asserts an unauthenticated request is refused |
+
+The architecture check is the interesting one. `scripts/check_architecture.py`
+parses the AST of every file in `quantnest/domain/` and fails the build on a
+module-level import of infrastructure or any framework — while still permitting
+a deliberate lazy import inside a function body:
+
+```
+$ python scripts/check_architecture.py
+Domain layer is clean: 11 files, no forbidden module-level imports.
+```
+
+The DDD boundary is the property most likely to erode quietly under future
+edits, so it is enforced by CI rather than left to review.
+
+The Docker job does more than `docker build`. It boots the image and exercises
+it, because a build can succeed and still crash on startup — which is exactly
+what happened during v11.1.0, when the auth dependencies were missing from
+`pyproject.toml`.
+
 ## 14. Running it locally
 
 ### Without Docker
@@ -1169,6 +1251,10 @@ docker compose up --build
 | `DATABASE_URL` | `sqlite:///./quantnest.db` | Postgres-swappable |
 | `QUANTNEST_MARKET_PROVIDER` | `yfinance` | `fake` for offline/CI |
 | `LOG_FORMAT` / `LOG_LEVEL` | `json` / `INFO` | `console` for local |
+| `RATE_LIMIT_ENABLED` | `true` | Set `false` to disable throttling |
+| `LOGIN_MAX_ATTEMPTS` | `10` | Login attempts per window |
+| `LOGIN_WINDOW_SECONDS` | `300` | Login window length |
+| `REGISTER_MAX_ATTEMPTS` | `5` | Registrations per window |
 | `CORS_ORIGINS` | `localhost:5173` | Comma-separated |
 | `VITE_API_URL` | `localhost:8000` | Frontend build-time |
 
@@ -1228,14 +1314,15 @@ Stated plainly — knowing what you have *not* built matters as much as what you
 
 | Limitation | Impact | Fix |
 |---|---|---|
-| **No token revocation** | A stolen access token is valid ≤30 min | Redis blocklist keyed on `jti` |
-| **No rate limiting** | Login is brute-forceable | slowapi or a gateway rule |
+| ~~No token revocation~~ | **Fixed in v11.2.0** — `/auth/logout`, `/auth/logout-all`, rotation | — |
+| ~~No rate limiting~~ | **Fixed in v11.2.0** — 10/5min login, 5/hour register | — |
+| **Single-process rate limiting** | N replicas allow N× the budget | Redis `INCR`/`EXPIRE` |
+| **Blocklist grows until purged** | `purge_expired()` exists but is not scheduled | Cron or a startup task |
 | **`localStorage` tokens** | XSS-readable | `httpOnly` cookies + CSRF |
 | **No email verification** | Anyone can register any address | Verification link flow |
 | **No password reset** | Locked out permanently | Time-limited reset token |
 | **In-process cache** | Doesn't scale past one instance | Redis |
 | **Not deployed** | No public URL | Fly.io / Railway / Render |
-| **No CI pipeline** | Tests run manually | GitHub Actions |
 | **yfinance untested live** | Sandbox blocks outbound TLS | Verify on first real run |
 | **Docker unbuilt** | No Docker in sandbox | Run `docker compose up` locally |
 | **Single-node only** | No horizontal scaling | Postgres + Redis + stateless instances |
@@ -1296,11 +1383,21 @@ network and Docker access.
 > only caught it because I ran the migration three times and diffed the counts
 > instead of trusting the first "success".
 
+**"How do you revoke a stateless JWT?"**
+> You cannot revoke the token itself, so you keep a server-side record of the
+> ones you have withdrawn. Individual sign-out stores the token's `jti` until
+> its natural expiry; sign-out-everywhere writes a single per-user cutoff
+> instant instead of one row per token. Refresh tokens are also rotated, so
+> redeeming one revokes it. The subtle part was that `iat` is integer seconds
+> while my cutoff had microsecond precision — signing back in within the same
+> second locked the user out. Clearing the cutoff on a successful password
+> login fixed it, because proving the password re-establishes the exact trust
+> that logout-all withdrew.
+
 **"What would you do next?"**
-> Three things in order. Redis for a token blocklist — that closes the
-> revocation gap, which is the most real weakness. Then rate limiting on
-> `/auth/login`, because it is currently brute-forceable. Then a CI pipeline, so
-> the 128 tests run on every push rather than when I remember.
+> Redis, for two reasons at once: the token blocklist and the rate limiter are
+> both in-process today, so neither survives horizontal scaling. After that,
+> deploy it — the images and CI exist, there is just no public URL yet.
 
 **"What would you do differently?"**
 > Introduce the ports on day one. The original code had entities persisting

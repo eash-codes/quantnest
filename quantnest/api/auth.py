@@ -6,10 +6,18 @@ import logging
 from datetime import datetime
 from typing import List, Optional
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Depends, Response, status
+from fastapi import Request
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-from quantnest.api.deps import AuthServiceDep, CurrentUserDep
+from quantnest.api.deps import (
+    AuthServiceDep,
+    BearerTokenDep,
+    CurrentUserDep,
+    rate_limit_login,
+    rate_limit_register,
+)
+from quantnest.infra.rate_limit import get_login_limiter, client_key
 
 logger = logging.getLogger(__name__)
 
@@ -41,6 +49,12 @@ class LoginRequest(StrictModel):
 
 class RefreshRequest(StrictModel):
     refresh_token: str = Field(min_length=1)
+
+
+class LogoutRequest(StrictModel):
+    refresh_token: Optional[str] = Field(
+        default=None, description="Revoke this refresh token too"
+    )
 
 
 class CreateWalletRequest(StrictModel):
@@ -81,6 +95,7 @@ class WalletSummary(BaseModel):
     response_model=SessionResponse,
     status_code=status.HTTP_201_CREATED,
     summary="Create an account",
+    dependencies=[Depends(rate_limit_register)],
 )
 async def register(request: RegisterRequest, auth: AuthServiceDep) -> SessionResponse:
     """Register a new user and provision their first wallet.
@@ -95,14 +110,26 @@ async def register(request: RegisterRequest, auth: AuthServiceDep) -> SessionRes
     return SessionResponse(**payload)
 
 
-@router.post("/login", response_model=SessionResponse, summary="Sign in")
-async def login(request: LoginRequest, auth: AuthServiceDep) -> SessionResponse:
+@router.post(
+    "/login",
+    response_model=SessionResponse,
+    summary="Sign in",
+    dependencies=[Depends(rate_limit_login)],
+)
+async def login(
+    request: LoginRequest, auth: AuthServiceDep, http_request: Request
+) -> SessionResponse:
     """Exchange email and password for an access and refresh token pair.
 
     Responds with an identical 401 whether the email is unknown or the
     password is wrong, so the endpoint cannot be used to enumerate accounts.
     """
     payload = auth.login(email=str(request.email), password=request.password)
+
+    # A correct password clears the throttle, so one legitimate user cannot
+    # be locked out by someone else guessing from the same NAT address.
+    get_login_limiter().reset(client_key(http_request, "login"))
+
     return SessionResponse(**payload)
 
 
@@ -111,6 +138,36 @@ async def refresh(request: RefreshRequest, auth: AuthServiceDep) -> SessionRespo
     """Issue a fresh token pair from a valid refresh token."""
     payload = auth.refresh(request.refresh_token)
     return SessionResponse(**payload)
+
+
+@router.post(
+    "/logout",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Sign out of this session",
+)
+async def logout(
+    request: LogoutRequest,
+    token: BearerTokenDep,
+    auth: AuthServiceDep,
+) -> Response:
+    """Revoke the current access token, and the refresh token when supplied.
+
+    Without this a stateless JWT would remain valid until it expired, making
+    sign-out purely cosmetic.
+    """
+    auth.logout(token, request.refresh_token)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
+
+
+@router.post(
+    "/logout-all",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Sign out of every session",
+)
+async def logout_all(current_user: CurrentUserDep, auth: AuthServiceDep) -> Response:
+    """Invalidate every token issued to this account so far."""
+    auth.logout_everywhere(current_user)
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.get("/me", response_model=UserProfile, summary="Current user profile")

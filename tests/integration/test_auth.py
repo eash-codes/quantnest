@@ -16,7 +16,16 @@ from quantnest.api.deps import get_db_session, get_market
 from quantnest.api.main import create_app
 from quantnest.domain.ports import StaticMarketDataProvider
 from quantnest.infra.db.models import Base
+from quantnest.infra.rate_limit import reset_limiters
 from quantnest.infra.security import JwtTokenService
+
+
+@pytest.fixture(autouse=True)
+def _reset_rate_limits():
+    """The limiter is a process-wide singleton; clear it between tests."""
+    reset_limiters()
+    yield
+    reset_limiters()
 
 
 @pytest.fixture

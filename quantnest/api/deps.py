@@ -11,19 +11,20 @@ from __future__ import annotations
 import uuid
 from typing import Annotated, Iterator, Optional
 
-from fastapi import Depends, Header, HTTPException, Path, status
+from fastapi import Depends, Header, HTTPException, Path, Request, status
 from fastapi.security import HTTPAuthorizationCredentials, HTTPBearer
 from sqlalchemy.orm import Session
 
 from quantnest.application.auth_service import AuthService
 from quantnest.application.history_service import HistoryService
 from quantnest.application.portfolio_service import PortfolioService
-from quantnest.domain.exceptions import AuthenticationError
+from quantnest.domain.exceptions import AuthenticationError, RateLimitExceededError
 from quantnest.domain.user import User
 from quantnest.domain.order_engine import OrderExecutionEngine
 from quantnest.domain.ports import MarketDataProvider
 from quantnest.infra.db.repositories import (
     SqlEventStore,
+    SqlTokenBlocklist,
     SqlOrderRepository,
     SqlPositionRepository,
     SqlTradeRepository,
@@ -33,6 +34,12 @@ from quantnest.infra.db.repositories import (
 from quantnest.infra.db.session import get_session_factory
 from quantnest.infra.market import get_market_provider
 from quantnest.infra.security import get_password_hasher, get_token_service
+from quantnest.infra.rate_limit import (
+    RATE_LIMIT_ENABLED,
+    client_key,
+    get_login_limiter,
+    get_register_limiter,
+)
 
 
 def get_db_session() -> Iterator[Session]:
@@ -171,12 +178,20 @@ TransactionIdDep = Annotated[str, Depends(get_transaction_id)]
 _bearer_scheme = HTTPBearer(auto_error=False, description="JWT access token")
 
 
+def get_token_blocklist(session: SessionDep) -> SqlTokenBlocklist:
+    return SqlTokenBlocklist(session)
+
+
+TokenBlocklistDep = Annotated[SqlTokenBlocklist, Depends(get_token_blocklist)]
+
+
 def get_auth_service(session: SessionDep) -> AuthService:
     return AuthService(
         users=SqlUserRepository(session),
         wallets=SqlWalletOwnershipRepository(session),
         hasher=get_password_hasher(),
         tokens=get_token_service(),
+        blocklist=SqlTokenBlocklist(session),
     )
 
 
@@ -201,6 +216,45 @@ def get_current_user(
 
 
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
+
+
+def get_bearer_token(
+    credentials: Annotated[
+        Optional[HTTPAuthorizationCredentials], Depends(_bearer_scheme)
+    ] = None,
+) -> str:
+    """The raw access token, needed by sign-out so it can be revoked."""
+    if credentials is None or not credentials.credentials:
+        raise AuthenticationError("Sign in to access this resource")
+    return credentials.credentials
+
+
+BearerTokenDep = Annotated[str, Depends(get_bearer_token)]
+
+
+# ── Rate limiting ────────────────────────────────────────────────────────
+
+
+def _enforce(request: Request, limiter, scope: str) -> None:
+    if not RATE_LIMIT_ENABLED:
+        return
+
+    result = limiter.check(client_key(request, scope))
+    if not result.allowed:
+        raise RateLimitExceededError(
+            "Too many attempts. Please wait before trying again.",
+            retry_after=result.retry_after,
+        )
+
+
+def rate_limit_login(request: Request) -> None:
+    """Throttle sign-in attempts per client IP."""
+    _enforce(request, get_login_limiter(), "login")
+
+
+def rate_limit_register(request: Request) -> None:
+    """Throttle account creation per client IP."""
+    _enforce(request, get_register_limiter(), "register")
 
 
 # ── Authorisation ────────────────────────────────────────────────────────

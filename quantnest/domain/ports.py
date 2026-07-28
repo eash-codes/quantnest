@@ -11,6 +11,7 @@ dependency arrow pointing inwards.
 
 from __future__ import annotations
 
+from datetime import datetime  # noqa: F401 - used in Protocol annotations
 from decimal import Decimal
 from typing import TYPE_CHECKING, Dict, List, Optional, Protocol, runtime_checkable
 
@@ -33,12 +34,14 @@ __all__ = [
     "WalletOwnershipRepository",
     "PasswordHasher",
     "TokenService",
+    "TokenBlocklist",
     "InMemoryEventStore",
     "InMemoryPositionRepository",
     "InMemoryTradeRepository",
     "InMemoryOrderRepository",
     "InMemoryUserRepository",
     "InMemoryWalletOwnershipRepository",
+    "InMemoryTokenBlocklist",
     "StaticMarketDataProvider",
 ]
 
@@ -178,6 +181,76 @@ class TokenService(Protocol):
     def verify_refresh_token(self, token: str) -> str:
         """Return the subject (user id). Raises ``AuthenticationError``."""
         ...
+
+
+@runtime_checkable
+class TokenBlocklist(Protocol):
+    """Revocation list for issued tokens.
+
+    JWTs are stateless, so a token stays valid until it expires unless the
+    server keeps a record of the ones it has revoked. This port is that
+    record. Two granularities are supported:
+
+    * ``revoke`` — a single token, by its ``jti`` claim (sign out this device)
+    * ``revoke_all_for_user`` — every token issued before a cutoff instant
+      (sign out everywhere, or force re-auth after a password change)
+    """
+
+    def revoke(self, jti: str, user_id: str, expires_at: "datetime") -> None:
+        """Block a single token until it would have expired anyway."""
+        ...
+
+    def is_revoked(self, jti: str) -> bool:
+        """True when this token has been explicitly revoked."""
+        ...
+
+    def revoke_all_for_user(self, user_id: str, issued_before: "datetime") -> None:
+        """Block every token for a user issued before ``issued_before``."""
+        ...
+
+    def user_cutoff(self, user_id: str) -> Optional["datetime"]:
+        """The user's global revocation instant, or ``None``."""
+        ...
+
+    def clear_cutoff(self, user_id: str) -> None:
+        """Lift the global cutoff, after the user proves their password."""
+        ...
+
+    def purge_expired(self, now: Optional["datetime"] = None) -> int:
+        """Delete entries whose tokens have expired. Returns the count."""
+        ...
+
+
+class InMemoryTokenBlocklist:
+    """Ephemeral :class:`TokenBlocklist`."""
+
+    def __init__(self) -> None:
+        self._revoked: Dict[str, "datetime"] = {}
+        self._cutoffs: Dict[str, "datetime"] = {}
+
+    def revoke(self, jti: str, user_id: str, expires_at: "datetime") -> None:
+        self._revoked[jti] = expires_at
+
+    def is_revoked(self, jti: str) -> bool:
+        return jti in self._revoked
+
+    def revoke_all_for_user(self, user_id: str, issued_before: "datetime") -> None:
+        self._cutoffs[user_id] = issued_before
+
+    def user_cutoff(self, user_id: str) -> Optional["datetime"]:
+        return self._cutoffs.get(user_id)
+
+    def clear_cutoff(self, user_id: str) -> None:
+        self._cutoffs.pop(user_id, None)
+
+    def purge_expired(self, now: Optional["datetime"] = None) -> int:
+        from datetime import datetime as _dt, timezone as _tz
+
+        moment = now or _dt.now(_tz.utc)
+        stale = [jti for jti, exp in self._revoked.items() if exp <= moment]
+        for jti in stale:
+            del self._revoked[jti]
+        return len(stale)
 
 
 class InMemoryUserRepository:
